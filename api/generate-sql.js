@@ -1,3 +1,5 @@
+console.log('=== デバッグ版が読み込まれました ===');
+
 exports.handler = async (event, context) => {
     const headers = {
         'Access-Control-Allow-Origin': '*',
