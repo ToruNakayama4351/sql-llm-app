@@ -1,115 +1,3 @@
-const MAX_JSON_SIZE = 25000; // 25KB制限
-
-// JSONデータを段階的に簡略化する関数
-function optimizeJSONForSQL(jsonData) {
-    if (!jsonData || typeof jsonData !== 'object') return jsonData;
-    
-    let result = JSON.parse(JSON.stringify(jsonData));
-    let jsonString = JSON.stringify(result);
-    
-    console.log(`元のJSONサイズ: ${jsonString.length} 文字`);
-    
-    // Level 1: 座標情報と不要プロパティを削除
-    if (jsonString.length > MAX_JSON_SIZE) {
-        console.log('Level 1 簡略化開始');
-        
-        function removeUnnecessaryProps(obj) {
-            const propsToRemove = ['x', 'y', 'w', 'h', 'pageNum', 'isNew', 'cells', 'boundingBox'];
-            
-            if (Array.isArray(obj)) {
-                return obj.map(item => removeUnnecessaryProps(item));
-            } else if (obj && typeof obj === 'object') {
-                const cleaned = {};
-                Object.keys(obj).forEach(key => {
-                    if (!propsToRemove.includes(key)) {
-                        cleaned[key] = removeUnnecessaryProps(obj[key]);
-                    }
-                });
-                return cleaned;
-            }
-            return obj;
-        }
-        
-        result = removeUnnecessaryProps(result);
-        jsonString = JSON.stringify(result);
-        console.log(`Level 1後: ${jsonString.length} 文字`);
-    }
-    
-    // Level 2: テーブル構造を簡略化
-    if (jsonString.length > MAX_JSON_SIZE && result.format?.tables) {
-        console.log('Level 2 簡略化開始');
-        
-        const simplifiedTables = {};
-        Object.keys(result.format.tables).forEach(tableName => {
-            const table = result.format.tables[tableName];
-            simplifiedTables[tableName] = {
-                tableID: table.tableID,
-                name: table.name,
-                columnNames: table.columns?.map(col => col.name) || [],
-                columnTypes: table.columns?.map(col => col.dataType) || [],
-                totalColumns: table.columns?.length || 0
-            };
-        });
-        
-        result.format.tables = simplifiedTables;
-        jsonString = JSON.stringify(result);
-        console.log(`Level 2後: ${jsonString.length} 文字`);
-    }
-    
-    // Level 3: 最小限の構造のみ保持
-    if (jsonString.length > MAX_JSON_SIZE) {
-        console.log('Level 3 簡略化開始');
-        
-        result = {
-            version: result.version,
-            format: {
-                name: result.format?.name,
-                formatID: result.format?.formatID,
-                // フィールド名のみ抽出
-                fieldNames: result.format?.boxes?.map(box => box.name) || [],
-                // テーブル名とカラム名のみ
-                tableStructure: Object.keys(result.format?.tables || {}).map(tableName => ({
-                    tableName,
-                    columns: result.format.tables[tableName]?.columnNames || []
-                }))
-            }
-        };
-        
-        jsonString = JSON.stringify(result);
-        console.log(`Level 3後: ${jsonString.length} 文字`);
-    }
-    
-    return result;
-}
-
-// プロンプトを最適化する関数
-function optimizePrompt(jsonData, tenantId, formatId, referenceSQLs, additionalInstructions) {
-    const optimizedJSON = optimizeJSONForSQL(jsonData);
-    
-    return `
-【重要】以下の情報からSQLクエリを生成してください。
-
-【フォーマット情報】
-- テナントID: ${tenantId || 'なし'}
-- フォーマットID: ${formatId || 'なし'}
-
-【データ構造】
-${JSON.stringify(optimizedJSON, null, 1)}
-
-${referenceSQLs ? `【参考SQLパターン】\n${referenceSQLs}\n` : ''}
-
-${additionalInstructions ? `【追加要件】\n${additionalInstructions}\n` : ''}
-
-【出力要求】
-- 上記参考SQLの構造に従って、WITH句を使用したSQLを生成
-- テナントIDとフォーマットIDを必ず含める
-- 効率的で実用的なクエリを作成
-- コメントは最小限に
-
-SQLクエリのみを出力してください：
-    `;
-}
-
 exports.handler = async (event, context) => {
     const headers = {
         'Access-Control-Allow-Origin': '*',
@@ -130,38 +18,61 @@ exports.handler = async (event, context) => {
     }
 
     try {
-        const body = JSON.parse(event.body);
-        console.log('受信データ:', Object.keys(body));
-
-        // 新しいデータ形式と古いデータ形式の両方に対応
-        let apiKey, optimizedPrompt;
-
-        if (body.jsonData !== undefined) {
-            // 新しいデータ形式
-            console.log('新しいデータ形式で処理');
-            const { apiKey: key, jsonData, tenantId, formatId, referenceSQLs, additionalInstructions } = body;
-            apiKey = key;
-            optimizedPrompt = optimizePrompt(jsonData, tenantId, formatId, referenceSQLs, additionalInstructions);
-        } else {
-            // 古いデータ形式（fallback）
-            console.log('古いデータ形式で処理');
-            const { apiKey: key, prompt } = body;
-            apiKey = key;
-            optimizedPrompt = prompt;
+        console.log('=== バックエンド開始 ===');
+        console.log('HTTPメソッド:', event.httpMethod);
+        console.log('ヘッダー:', event.headers);
+        
+        // リクエストボディの解析
+        let body;
+        try {
+            body = JSON.parse(event.body);
+            console.log('受信データキー:', Object.keys(body));
+            console.log('apiKey存在:', !!body.apiKey);
+            console.log('jsonData存在:', !!body.jsonData);
+        } catch (parseError) {
+            console.error('JSON解析エラー:', parseError);
+            throw new Error('リクエストボディのJSON解析に失敗しました');
         }
+
+        const { apiKey, jsonData, tenantId, formatId, referenceSQLs, additionalInstructions } = body;
 
         if (!apiKey) {
             throw new Error('APIキーが提供されていません');
         }
 
-        console.log(`最終プロンプトサイズ: ${optimizedPrompt.length} 文字`);
+        console.log('=== データサイズ確認 ===');
+        console.log('JSONデータサイズ:', jsonData ? JSON.stringify(jsonData).length : 0, '文字');
+        console.log('参考SQLサイズ:', referenceSQLs ? referenceSQLs.length : 0, '文字');
+        console.log('テナントID:', tenantId);
+        console.log('フォーマットID:', formatId);
 
-        // プロンプトが大きすぎる場合はさらに削減
-        if (optimizedPrompt.length > MAX_JSON_SIZE) {
-            optimizedPrompt = optimizedPrompt.substring(0, MAX_JSON_SIZE) + 
-                '\n\n[大きなデータのため省略。主要構造に基づいてSQLを生成してください]';
-        }
+        // シンプルなプロンプトを構築
+        const prompt = `
+以下の情報からSQLクエリを生成してください。
 
+【テナント情報】
+- テナントID: ${tenantId || 'なし'}
+- フォーマットID: ${formatId || 'なし'}
+
+【JSONデータ構造】
+${jsonData ? JSON.stringify(jsonData, null, 2).substring(0, 5000) : 'なし'}
+
+【参考SQL】
+${referenceSQLs ? referenceSQLs.substring(0, 5000) : 'なし'}
+
+【追加指示】
+${additionalInstructions || 'なし'}
+
+【要求】
+上記情報に基づいて、WITH句を使用したSQLクエリを生成してください。
+SQLクエリのみを出力してください。
+        `;
+
+        console.log('=== プロンプト準備完了 ===');
+        console.log('プロンプトサイズ:', prompt.length, '文字');
+
+        // Claude API呼び出し
+        console.log('=== Claude API呼び出し開始 ===');
         const response = await fetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
             headers: {
@@ -171,21 +82,28 @@ exports.handler = async (event, context) => {
             },
             body: JSON.stringify({
                 model: 'claude-3-5-sonnet-20241022',
-                max_tokens: 6000,
+                max_tokens: 4000,
                 messages: [{
                     role: 'user',
-                    content: optimizedPrompt
+                    content: prompt
                 }]
             })
         });
 
+        console.log('=== Claude APIレスポンス ===');
+        console.log('ステータス:', response.status);
+        console.log('OK:', response.ok);
+
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(`Claude API Error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
+            const errorText = await response.text();
+            console.error('Claude APIエラー:', errorText);
+            throw new Error(`Claude API Error: ${response.status} - ${errorText}`);
         }
 
         const data = await response.json();
-
+        console.log('=== 成功レスポンス ===');
+        console.log('レスポンスキー:', Object.keys(data));
+        
         return {
             statusCode: 200,
             headers,
@@ -193,14 +111,18 @@ exports.handler = async (event, context) => {
         };
 
     } catch (error) {
-        console.error('詳細エラー:', error);
+        console.error('=== 詳細エラー情報 ===');
+        console.error('エラー名:', error.name);
+        console.error('エラーメッセージ:', error.message);
+        console.error('スタックトレース:', error.stack);
+        
         return {
             statusCode: 500,
             headers,
             body: JSON.stringify({ 
                 error: error.message,
                 type: error.name,
-                stack: error.stack
+                details: 'バックエンドでエラーが発生しました。コンソールログを確認してください。'
             })
         };
     }
