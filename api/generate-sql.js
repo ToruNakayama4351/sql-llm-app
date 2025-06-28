@@ -116,6 +116,9 @@ ${additionalInstructions || 'なし'}
 - 全ての項目を完全に記述する
 - SQLの途中で切れないよう、完全なSQLクエリを生成する
 - レスポンスサイズを気にせず、完全なSQLを出力する
+- 「複数のメッセージに分けて」「前半部分」「続く」などの対話的表現は禁止
+- 説明文は一切不要、SQLクエリのみを出力する
+- 1つの完全なSQLクエリとして出力する
 
 上記の全てのBox項目（${optimizedJsonData?.format?.boxes?.length || 0}個）と全てのTableカラムを含む、参考SQLパターンに従った完全なSQLクエリのみを出力してください。`;
 
@@ -131,7 +134,7 @@ ${additionalInstructions || 'なし'}
             },
             body: JSON.stringify({
                 model: 'claude-3-5-sonnet-20241022',
-                max_tokens: 8000, // さらに増加
+                max_tokens: 12000, // さらに大幅増加
                 messages: [{
                     role: 'user',
                     content: prompt
