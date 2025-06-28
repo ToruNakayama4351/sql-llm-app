@@ -93,7 +93,8 @@ ${optimizedJsonData?.format?.boxes?.map((box, i) => `${i+1}.${box.name}`).join('
 
 【Table項目（各テーブルの全カラム）全て含める】
 ${Object.values(optimizedJsonData?.format?.tables || {}).map((table, i) => 
-    `テーブル${i+1}:${table.name}\n${table.columns?.map((col, j) => `  ${j+1}.${col.name}`).join('\n') || ''}`
+    `テーブル${i+1}: ${table.name}
+${table.columns?.map((col, j) => `  ${j+1}.${col.name} (${col.dataType})`).join('\n') || ''}`
 ).join('\n') || 'なし'}
 
 【生成ルール（絶対厳守）】
@@ -102,9 +103,10 @@ ${Object.values(optimizedJsonData?.format?.tables || {}).map((table, i) =>
 3. 全Tableカラムの個別CTE作成
 4. box.name='項目名'でフィルタ
 5. table.column_name='カラム名'で個別処理
-6. 全CTEをJOIN
-7. 説明文禁止、SQLのみ出力
-8. 省略禁止、完全なSQL生成
+6. table_idは指定しない（tenant_idとformat_idのみ使用）
+7. 全CTEをJOIN
+8. 説明文禁止、SQLのみ出力
+9. 省略禁止、完全なSQL生成
 
 SQLクエリのみ出力:
         `;
