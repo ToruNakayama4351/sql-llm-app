@@ -77,46 +77,39 @@ export default async function handler(req, res) {
             optimizedReferenceSQLs = referenceSQLs.substring(0, 15000) + '\n[参考SQLが多いため一部省略]';
         }
 
-        // プロンプトの構築（詳細な情報を含める）
+        // プロンプトの構築（参考SQLパターンを最優先）
         const prompt = `
-以下の情報から、詳細で実用的なSQLクエリを生成してください。
+【重要】以下の参考SQLパターンに厳密に従って、SQLクエリを生成してください。
 
-【テナント・フォーマット情報】
+【参考SQLパターン（必ず従うこと）】
+${optimizedReferenceSQLs || 'なし'}
+
+【適用するデータ情報】
 - テナントID: ${tenantId || 'なし'}
 - フォーマットID: ${formatId || 'なし'}
+- フォーマット名: ${optimizedJsonData?.format?.name || 'なし'}
 
-【フォーマット詳細】
-フォーマット名: ${optimizedJsonData?.format?.name || 'なし'}
+【Box項目（${optimizedJsonData?.format?.boxes?.length || 0}個）】
+${optimizedJsonData?.format?.boxes?.map(box => `- ${box.name} (${box.dataType})`).join('\n') || 'なし'}
 
-【Box項目一覧】（${optimizedJsonData?.format?.boxes?.length || 0}個）
-${optimizedJsonData?.format?.boxes?.map(box => 
-    `- ${box.name} (${box.dataType}) [fieldID: ${box.fieldID}]`
-).join('\n') || 'なし'}
-
-【Table構造】（${Object.keys(optimizedJsonData?.format?.tables || {}).length}個）
+【Table項目（${Object.keys(optimizedJsonData?.format?.tables || {}).length}個）】
 ${Object.values(optimizedJsonData?.format?.tables || {}).map(table => 
-    `テーブル: ${table.name} [tableID: ${table.tableID}]
-カラム: ${table.columns?.map(col => `${col.name}(${col.dataType})`).join(', ') || 'なし'}`
-).join('\n\n') || 'なし'}
-
-【参考SQLパターン】
-${optimizedReferenceSQLs || 'なし'}
+    `- ${table.name}: ${table.columns?.map(col => col.name).join(', ') || 'なし'}`
+).join('\n') || 'なし'}
 
 【追加指示】
 ${additionalInstructions || 'なし'}
 
-【生成要求】
-上記の詳細な情報に基づいて、WITH句を使用した包括的なSQLクエリを生成してください。
+【生成ルール（必須）】
+1. 参考SQLとまったく同じ構造を使用する
+2. WITH句で各Box項目ごとに個別のCTEを作成する
+3. WITH句で各Tableカラムごとに個別のCTEを作成する（GROUP BYは使わない）
+4. box.name = '項目名' の形式でフィルタリングする（field_idは使わない）
+5. table.column_name = 'カラム名' の形式で各カラムを個別処理する
+6. 最終SELECTでは参考SQLと同じJOIN構造を使用する
+7. テナントIDとフォーマットIDのみ新しい値に置き換える
 
-重要なポイント:
-1. 全てのBox項目とTable項目を活用する
-2. 参考SQLの構造とパターンを参考にする  
-3. テナントIDとフォーマットIDを正確に使用する
-4. 実用的で効率的なクエリ構造にする
-5. 適切なJOIN構造を使用する
-
-SQLクエリのみを出力してください。
-        `;
+上記のBox項目とTable項目を全て含む、参考SQLパターンに従ったSQLクエリのみを出力してください。`;
 
         console.log('=== Claude API呼び出し開始 ===');
         console.log('プロンプトサイズ:', prompt.length, '文字');
