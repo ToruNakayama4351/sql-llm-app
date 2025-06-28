@@ -134,7 +134,7 @@ ${additionalInstructions || 'なし'}
             },
             body: JSON.stringify({
                 model: 'claude-3-5-sonnet-20241022',
-                max_tokens: 12000, // さらに大幅増加
+                max_tokens: 8192, // Claude 3.5 Sonnetの最大値
                 messages: [{
                     role: 'user',
                     content: prompt
