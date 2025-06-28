@@ -77,7 +77,7 @@ export default async function handler(req, res) {
             optimizedReferenceSQLs = referenceSQLs.substring(0, 15000) + '\n[参考SQLが多いため一部省略]';
         }
 
-        // プロンプトの構築（参考SQLパターンを最優先）
+        // プロンプトの構築（参考SQLパターンを最優先 + 全項目明示）
         const prompt = `
 【重要】以下の参考SQLパターンに厳密に従って、SQLクエリを生成してください。
 
@@ -89,27 +89,35 @@ ${optimizedReferenceSQLs || 'なし'}
 - フォーマットID: ${formatId || 'なし'}
 - フォーマット名: ${optimizedJsonData?.format?.name || 'なし'}
 
-【Box項目（${optimizedJsonData?.format?.boxes?.length || 0}個）】
-${optimizedJsonData?.format?.boxes?.map(box => `- ${box.name} (${box.dataType})`).join('\n') || 'なし'}
+【Box項目（${optimizedJsonData?.format?.boxes?.length || 0}個）- 全て含めること】
+${optimizedJsonData?.format?.boxes?.map((box, index) => `${index + 1}. ${box.name} (${box.dataType})`).join('\n') || 'なし'}
 
-【Table項目（${Object.keys(optimizedJsonData?.format?.tables || {}).length}個）】
-${Object.values(optimizedJsonData?.format?.tables || {}).map(table => 
-    `- ${table.name}: ${table.columns?.map(col => col.name).join(', ') || 'なし'}`
+【Table項目（${Object.keys(optimizedJsonData?.format?.tables || {}).length}個）- 全カラム含めること】
+${Object.values(optimizedJsonData?.format?.tables || {}).map((table, tableIndex) => 
+    `テーブル${tableIndex + 1}: ${table.name}
+${table.columns?.map((col, colIndex) => `  ${colIndex + 1}. ${col.name} (${col.dataType})`).join('\n') || '  なし'}`
 ).join('\n') || 'なし'}
 
 【追加指示】
 ${additionalInstructions || 'なし'}
 
-【生成ルール（必須）】
+【生成ルール（絶対厳守）】
 1. 参考SQLとまったく同じ構造を使用する
-2. WITH句で各Box項目ごとに個別のCTEを作成する
-3. WITH句で各Tableカラムごとに個別のCTEを作成する（GROUP BYは使わない）
-4. box.name = '項目名' の形式でフィルタリングする（field_idは使わない）
-5. table.column_name = 'カラム名' の形式で各カラムを個別処理する
-6. 最終SELECTでは参考SQLと同じJOIN構造を使用する
-7. テナントIDとフォーマットIDのみ新しい値に置き換える
+2. 上記の全てのBox項目（${optimizedJsonData?.format?.boxes?.length || 0}個）について個別のCTEを作成する
+3. 上記の全てのTableカラム（全カラム）について個別のCTEを作成する
+4. 一つも省略してはいけない - 全項目を必ず含める
+5. box.name = '項目名' の形式でフィルタリングする（field_idは使わない）
+6. table.column_name = 'カラム名' の形式で各カラムを個別処理する
+7. 最終SELECTでは全てのCTEをJOINする
+8. テナントIDとフォーマットIDのみ新しい値に置き換える
 
-上記のBox項目とTable項目を全て含む、参考SQLパターンに従ったSQLクエリのみを出力してください。`;
+【重要な注意事項】
+- 省略記号（...）や「省略」という表現は一切使用しない
+- 全ての項目を完全に記述する
+- SQLの途中で切れないよう、完全なSQLクエリを生成する
+- レスポンスサイズを気にせず、完全なSQLを出力する
+
+上記の全てのBox項目（${optimizedJsonData?.format?.boxes?.length || 0}個）と全てのTableカラムを含む、参考SQLパターンに従った完全なSQLクエリのみを出力してください。`;
 
         console.log('=== Claude API呼び出し開始 ===');
         console.log('プロンプトサイズ:', prompt.length, '文字');
@@ -123,7 +131,7 @@ ${additionalInstructions || 'なし'}
             },
             body: JSON.stringify({
                 model: 'claude-3-5-sonnet-20241022',
-                max_tokens: 6000, // トークン数を増加
+                max_tokens: 8000, // さらに増加
                 messages: [{
                     role: 'user',
                     content: prompt
