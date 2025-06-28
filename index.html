@@ -851,11 +851,12 @@ SQLクエリのみを出力してください。
                 });
 
                 if (!response.ok) {
-                    throw new Error(`API Error: ${response.status}`);
-                }
+    const errorText = await response.text();
+    throw new Error(`API Error: ${response.status} - ${errorText}`);
+}
 
-                const data = await response.json();
-                const generatedSQL = data.content[0].text;
+const data = await response.json();
+const generatedSQL = data.content && data.content[0] ? data.content[0].text : 'SQL生成に失敗しました';
 
                 document.getElementById('generatedSQL').value = generatedSQL;
                 document.getElementById('result').style.display = 'block';
