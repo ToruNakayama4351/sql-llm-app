@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/generate-sql.js": {
+      "maxDuration": 60
+    }
+  }
+}
