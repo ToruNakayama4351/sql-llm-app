@@ -982,21 +982,64 @@ async function generateSQL() {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 55000); // 55秒でタイムアウト
 
+// API呼び出し（デバッグ情報追加版）
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 55000);
+
+        const requestBody = {
+            apiKey: apiKey,
+            jsonData: jsonData,
+            tenantId: tenantId,
+            formatId: formatId,
+            referenceSQLs: referenceSQLs,
+            additionalInstructions: additionalInstructions
+        };
+
+        // デバッグ情報をコンソールに出力
+        console.log('=== SQL生成リクエスト詳細 ===');
+        console.log('JSONデータサイズ:', JSON.stringify(jsonData).length, '文字');
+        console.log('参考SQLサイズ:', referenceSQLs.length, '文字');
+        console.log('テナントID:', tenantId);
+        console.log('フォーマットID:', formatId);
+
         const response = await fetch('/api/generate-sql', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                apiKey: apiKey,
-                jsonData: jsonData,
-                tenantId: tenantId,
-                formatId: formatId,
-                referenceSQLs: referenceSQLs,
-                additionalInstructions: additionalInstructions
-            }),
+            body: JSON.stringify(requestBody),
             signal: controller.signal
         });
+
+        clearTimeout(timeoutId);
+        
+        // ローディング表示を削除
+        const loadingElement = document.getElementById('sqlGenerationLoading');
+        if (loadingElement) {
+            loadingElement.remove();
+        }
+
+        console.log('=== レスポンス情報 ===');
+        console.log('ステータス:', response.status);
+        console.log('OK:', response.ok);
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('=== エラー詳細 ===');
+            console.error('レスポンステキスト:', errorText);
+            
+            // より詳細なエラー情報
+            let errorMessage = `API Error: ${response.status}`;
+            try {
+                const errorData = JSON.parse(errorText);
+                errorMessage += ` - ${errorData.error || errorData.message || 'Unknown error'}`;
+                console.error('解析済みエラー:', errorData);
+            } catch (e) {
+                errorMessage += ` - ${errorText}`;
+            }
+            
+            throw new Error(errorMessage);
+        }
 
         clearTimeout(timeoutId);
         
