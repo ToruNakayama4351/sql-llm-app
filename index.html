@@ -898,267 +898,149 @@ function handleFile(file, type) {
     }
 }
         // SQL生成（実際のClaude API呼び出し）
-        async function generateSQL() {
-            const jsonText = document.getElementById('jsonText').value;
-            const apiKey = document.getElementById('claudeApiKey').value;
-            const additionalInstructions = document.getElementById('additionalInstructions').value.trim();
-            const tenantId = document.getElementById('tenantId').value.trim();
-            const formatId = document.getElementById('formatId').value.trim();
-            
-            if (!uploadedImage && !jsonText) {
-                showStatus('帳票画像またはJSONデータを入力してください', 'error');
-                return;
-            }
+       // SQL生成（修正版：新しいデータ形式対応）
+async function generateSQL() {
+    const jsonText = document.getElementById('jsonText').value;
+    const apiKey = document.getElementById('claudeApiKey').value;
+    const additionalInstructions = document.getElementById('additionalInstructions').value.trim();
+    const tenantId = document.getElementById('tenantId').value.trim();
+    const formatId = document.getElementById('formatId').value.trim();
+    
+    if (!uploadedImage && !jsonText) {
+        showStatus('帳票画像またはJSONデータを入力してください', 'error');
+        return;
+    }
 
-            if (!apiKey) {
-                // APIキーがない場合はデモ版として動作
-                showStatus('APIキーが未設定のため、デモ版SQL生成を実行中...', 'success');
-                setTimeout(() => {
-                    const demoSQL = generateDemoSQL(JSON.parse(jsonText || '{}'), additionalInstructions, tenantId, formatId);
-                    document.getElementById('generatedSQL').value = demoSQL;
-                    document.getElementById('result').style.display = 'block';
-                    showStatus('デモ版SQLが生成されました（実際のAI生成にはAPIキーが必要です）', 'success');
-                    document.getElementById('result').scrollIntoView({ behavior: 'smooth' });
-                }, 2000);
-                return;
-            }
+    if (!apiKey) {
+        // APIキーがない場合はデモ版として動作
+        showStatus('APIキーが未設定のため、デモ版SQL生成を実行中...', 'success');
+        setTimeout(() => {
+            const demoSQL = generateDemoSQL(JSON.parse(jsonText || '{}'), additionalInstructions, tenantId, formatId);
+            document.getElementById('generatedSQL').value = demoSQL;
+            document.getElementById('result').style.display = 'block';
+            showStatus('デモ版SQLが生成されました（実際のAI生成にはAPIキーが必要です）', 'success');
+            document.getElementById('result').scrollIntoView({ behavior: 'smooth' });
+        }, 2000);
+        return;
+    }
 
-            // JSONデータの解析を試行
-            let jsonData = null;
-            if (jsonText) {
-                try {
-                    jsonData = JSON.parse(jsonText);
-                } catch (e) {
-                    showStatus('JSONデータが正しくありません', 'error');
-                    return;
-                }
-            }
+    // JSONデータの解析
+    let jsonData = null;
+    if (jsonText) {
+        try {
+            jsonData = JSON.parse(jsonText);
+        } catch (e) {
+            showStatus('JSONデータが正しくありません', 'error');
+            return;
+        }
+    }
 
-            showStatus('AI SQL生成中...', 'success');
+    showStatus('🚀 AI SQL生成中...', 'success');
 
-            try {
-                // 参考SQLの準備
-                let referenceSQLs = '';
-                if (templates.length > 0) {
-                    referenceSQLs += '\n【ローカル参考SQL】\n';
-                    templates.forEach(template => {
-                        referenceSQLs += `--- ${template.name} ---\n${template.sql}\n\n`;
-                    });
-                }
+    try {
+        // 参考SQLの準備
+        let referenceSQLs = '';
+        if (templates.length > 0) {
+            referenceSQLs += '\n【ローカル参考SQL】\n';
+            templates.forEach(template => {
+                referenceSQLs += `--- ${template.name} ---\n${template.sql}\n\n`;
+            });
+        }
 
-                if (githubSqlFiles.length > 0 && selectedCustomer) {
-                    const customerSQLs = githubSqlFiles.filter(file => 
-                        file.path.includes(`/customer/${selectedCustomer}/`)
-                    );
-                    if (customerSQLs.length > 0) {
-                        referenceSQLs += `\n【GitHub参考SQL (${selectedCustomer})】\n`;
-                        customerSQLs.forEach(file => {
-                            referenceSQLs += `--- ${file.name} ---\n${file.content}\n\n`;
-                        });
-                    }
-                }
-
-                // プロンプトに追加指示を含める
-                // JSON詳細簡略化関数（重要情報は保持）
-                function advancedSimplifyJSON(jsonData) {
-                    if (!jsonData || typeof jsonData !== 'object') return jsonData;
-                    
-                    const simplified = {
-                        version: jsonData.version,
-                        timestamp: jsonData.timestamp,
-                        format: {
-                            name: jsonData.format?.name || 'Unknown Format',
-                            formatID: jsonData.format?.formatID,
-                            versionID: jsonData.format?.versionID,
-                            // 全フィールド詳細情報を保持
-                            fields: {},
-                            // テーブル完全構造を保持
-                            tables: {},
-                            // その他重要メタデータ
-                            defaultScale: jsonData.format?.defaultScale
-                        }
-                    };
-                    
-                    // 全フィールドの詳細情報を保持（座標以外）
-                    if (jsonData.format?.boxes) {
-                        jsonData.format.boxes.forEach(box => {
-                            simplified.format.fields[box.name] = {
-                                fieldID: box.fieldID,
-                                name: box.name,
-                                dataType: box.dataType,
-                                isRequired: box.isRequired,
-                                isNew: box.isNew,
-                                pageNum: box.pageNum,
-                                // 入力設定も保持
-                                inputSettings: box.inputSettings
-                            };
-                        });
-                    }
-                    
-                    // テーブル完全構造を保持（座標以外）
-                    if (jsonData.format?.tables) {
-                        jsonData.format.tables.forEach(table => {
-                            simplified.format.tables[table.name] = {
-                                tableID: table.tableID,
-                                name: table.name,
-                                orientation: table.orientation,
-                                pageNum: table.pageNum,
-                                isNew: table.isNew,
-                                columns: table.columns.map(col => ({
-                                    columnID: col.columnID,
-                                    name: col.name,
-                                    dataType: col.dataType,
-                                    isRequired: col.isRequired,
-                                    isNew: col.isNew,
-                                    isEndOfSection: col.isEndOfSection,
-                                    isStartOfSection: col.isStartOfSection,
-                                    pageNum: col.pageNum,
-                                    // セル数とデータ型情報
-                                    cellCount: col.cells?.length || 0,
-                                    cells: col.cells?.map(cell => ({
-                                        fieldID: cell.fieldID,
-                                        rowNum: cell.rowNum,
-                                        pageNum: cell.pageNum,
-                                        isNew: cell.isNew
-                                        // 座標は除外: x, y, w, h
-                                    })) || []
-                                }))
-                            };
-                        });
-                    }
-                    
-                    return simplified;
-                }
-
-                // 段階的簡略化（サイズに応じて調整）
-                function tieredSimplify(jsonData) {
-                    let result = jsonData;
-                    let jsonString = JSON.stringify(result);
-                    
-                    console.log(`元のJSONサイズ: ${jsonString.length} 文字`);
-                    
-                    // Level 1: 座標情報のみ削除（30KB以上の場合）
-                    if (jsonString.length > 30000) {
-                        console.log('Level 1 簡略化: 座標情報を削除');
-                        result = advancedSimplifyJSON(result);
-                        jsonString = JSON.stringify(result);
-                        console.log(`Level 1後: ${jsonString.length} 文字`);
-                    }
-                    
-                    // Level 2: セル詳細削除（20KB以上の場合）
-                    if (jsonString.length > 20000) {
-                        console.log('Level 2 簡略化: セル詳細を削除');
-                        if (result.format?.tables) {
-                            Object.keys(result.format.tables).forEach(tableName => {
-                                result.format.tables[tableName].columns.forEach(col => {
-                                    // セル配列をサマリーに変更
-                                    col.cellSummary = `${col.cellCount}個のセル`;
-                                    delete col.cells;
-                                });
-                            });
-                        }
-                        jsonString = JSON.stringify(result);
-                        console.log(`Level 2後: ${jsonString.length} 文字`);
-                    }
-                    
-                    // Level 3: 最小限情報のみ（15KB以上の場合）
-                    if (jsonString.length > 15000) {
-                        console.log('Level 3 簡略化: 最小限情報のみ');
-                        // テーブル構造を簡略化
-                        if (result.format?.tables) {
-                            Object.keys(result.format.tables).forEach(tableName => {
-                                const table = result.format.tables[tableName];
-                                result.format.tables[tableName] = {
-                                    tableID: table.tableID,
-                                    name: table.name,
-                                    orientation: table.orientation,
-                                    columnNames: table.columns.map(col => col.name),
-                                    columnTypes: table.columns.map(col => col.dataType),
-                                    totalColumns: table.columns.length
-                                };
-                            });
-                        }
-                        jsonString = JSON.stringify(result);
-                        console.log(`Level 3後: ${jsonString.length} 文字`);
-                    }
-                    
-                    return result;
-                }
-
-                // 大きなJSONを段階的に簡略化
-                let processedJsonData = jsonData;
-                if (jsonData && JSON.stringify(jsonData).length > 25000) {
-                    console.log('大きなJSONを段階的に簡略化中...');
-                    processedJsonData = tieredSimplify(jsonData);
-                    console.log(`最終サイズ: ${JSON.stringify(processedJsonData).length} 文字`);
-                }
-                const prompt = `
-以下の情報を基に、適切なSQLクエリを生成してください。
-
-【JSONデータ】
-${processedJsonData ? JSON.stringify(processedJsonData, null, 2) : 'なし'}
-
-【帳票画像】
-${uploadedImage ? `アップロード済み: ${uploadedImage.name}` : 'なし'}
-
-【テナントID】
-${tenantId || 'なし'}
-
-【フォーマットID】
-${formatId || 'なし'}
-
-【参考SQL】
-${referenceSQLs || 'なし'}
-
-${additionalInstructions ? `【追加指示・要望】\n${additionalInstructions}\n` : ''}
-
-【基本要求】
-- 提供されたJSONデータの構造を分析してください
-- 帳票画像から読み取れる情報を考慮してください
-- テナントIDとフォーマットIDを適切にSQL内で活用してください
-- 参考SQLのパターンを活用してください
-- 上記の追加指示・要望を必ず考慮してください
-- 実用的で効率的なSQLクエリを生成してください
-- コメントを含めて、わかりやすく記述してください
-
-SQLクエリのみを出力してください。
-                `;
-
-                // Netlify Functionsを使用してAPI呼び出し
-                const response = await fetch('/api/generate-sql', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        apiKey: apiKey,
-                        prompt: prompt
-                    })
+        if (githubSqlFiles.length > 0 && selectedCustomer) {
+            const customerSQLs = githubSqlFiles.filter(file => 
+                file.path.includes(`/customer/${selectedCustomer}/`)
+            );
+            if (customerSQLs.length > 0) {
+                referenceSQLs += `\n【GitHub参考SQL (${selectedCustomer})】\n`;
+                customerSQLs.forEach(file => {
+                    referenceSQLs += `--- ${file.name} ---\n${file.content}\n\n`;
                 });
-
-                if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`API Error: ${response.status} - ${errorText}`);
-}
-
-const data = await response.json();
-const generatedSQL = data.content && data.content[0] ? data.content[0].text : 'SQL生成に失敗しました';
-
-                document.getElementById('generatedSQL').value = generatedSQL;
-                document.getElementById('result').style.display = 'block';
-                showStatus('AI SQLが正常に生成されました！', 'success');
-                
-                // APIキーをローカルに保存
-                localStorage.setItem('claudeApiKey', apiKey);
-                
-                // 結果エリアにスクロール
-                document.getElementById('result').scrollIntoView({ behavior: 'smooth' });
-
-            } catch (error) {
-                console.error('Error:', error);
-                showStatus('SQL生成中にエラーが発生しました: ' + error.message, 'error');
             }
         }
+
+        // 参考SQLサイズ制限（10KB以下）
+        if (referenceSQLs.length > 10000) {
+            referenceSQLs = referenceSQLs.substring(0, 10000) + '\n[参考SQLが多いため一部省略]';
+        }
+
+        // 新しいデータ形式でAPI呼び出し
+        console.log('=== 送信データ詳細 ===');
+        console.log('JSONデータサイズ:', JSON.stringify(jsonData).length, '文字');
+        console.log('参考SQLサイズ:', referenceSQLs.length, '文字');
+        console.log('テナントID:', tenantId);
+        console.log('フォーマットID:', formatId);
+
+        const requestBody = {
+            apiKey: apiKey,
+            jsonData: jsonData,
+            tenantId: tenantId,
+            formatId: formatId,
+            referenceSQLs: referenceSQLs,
+            additionalInstructions: additionalInstructions
+        };
+
+        const response = await fetch('/api/generate-sql', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestBody)
+        });
+
+        console.log('=== レスポンス詳細 ===');
+        console.log('ステータス:', response.status);
+        console.log('OK:', response.ok);
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('=== エラー詳細 ===');
+            console.error('レスポンス:', errorText);
+            
+            let errorMessage = `API Error: ${response.status}`;
+            try {
+                const errorData = JSON.parse(errorText);
+                errorMessage += ` - ${errorData.error || errorData.message || 'Unknown error'}`;
+            } catch (e) {
+                errorMessage += ` - ${errorText}`;
+            }
+            
+            throw new Error(errorMessage);
+        }
+
+        const data = await response.json();
+        console.log('=== 成功レスポンス ===');
+        console.log('データ:', data);
+        
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        const generatedSQL = data.content && data.content[0] ? data.content[0].text : 'SQL生成に失敗しました';
+
+        document.getElementById('generatedSQL').value = generatedSQL;
+        document.getElementById('result').style.display = 'block';
+        showStatus('🎉 AI SQLが正常に生成されました！', 'success');
+        
+        // APIキーをローカルに保存
+        localStorage.setItem('claudeApiKey', apiKey);
+        
+        // 結果エリアにスクロール
+        document.getElementById('result').scrollIntoView({ behavior: 'smooth' });
+
+    } catch (error) {
+        console.error('=== エラー情報 ===');
+        console.error('エラー:', error);
+        
+        if (error.message.includes('500')) {
+            showStatus('⚠️ サーバーエラーが発生しました。コンソールログを確認してください。', 'error');
+        } else if (error.message.includes('504') || error.message.includes('timeout')) {
+            showStatus('⚠️ サーバータイムアウトが発生しました。', 'error');
+        } else {
+            showStatus('❌ SQL生成中にエラーが発生しました: ' + error.message, 'error');
+        }
+    }
+}
 
         // SQLコピー
         function copySQL() {
