@@ -33,73 +33,88 @@ export default async function handler(req, res) {
             throw new Error('APIキーが提供されていません');
         }
 
-        // JSONデータサイズの確認と最適化
+        // JSONデータの情報を保持（軽量化レベルを大幅に緩和）
         let optimizedJsonData = jsonData;
         if (jsonData) {
             const originalSize = JSON.stringify(jsonData).length;
-            console.log('元のJSONサイズ:', originalSize, '文字');
+            console.log('受信JSONサイズ:', originalSize, '文字');
             
-            // 大きすぎる場合は簡略化
-            if (originalSize > 20000) {
-                console.log('JSONデータを簡略化中...');
+            // Box項目とTable項目の詳細を確認
+            const boxCount = jsonData.format?.boxes?.length || 0;
+            const tableCount = Object.keys(jsonData.format?.tables || {}).length;
+            console.log('Box項目数:', boxCount);
+            console.log('Table数:', tableCount);
+            
+            // 50KB以下の場合は簡略化せずにそのまま使用
+            if (originalSize <= 50000) {
+                console.log('✅ サイズが適切なため、簡略化をスキップ');
+                optimizedJsonData = jsonData;
+            } else {
+                console.log('⚠️ 大きなJSONデータを軽度に簡略化');
+                // 最小限の簡略化のみ実行
                 optimizedJsonData = {
                     version: jsonData.version,
                     format: {
                         name: jsonData.format?.name,
                         formatID: jsonData.format?.formatID,
                         versionID: jsonData.format?.versionID,
-                        // Box項目の簡略化
-                        boxes: jsonData.format?.boxes?.map(box => ({
-                            name: box.name,
-                            dataType: box.dataType,
-                            fieldID: box.fieldID
-                        })) || [],
-                        // Table項目の簡略化
-                        tables: {}
+                        // 全Box項目を保持
+                        boxes: jsonData.format?.boxes || [],
+                        // 全Table項目を保持
+                        tables: jsonData.format?.tables || {}
                     }
                 };
                 
-                // テーブル構造の簡略化
-                if (jsonData.format?.tables) {
-                    Object.keys(jsonData.format.tables).forEach(tableName => {
-                        const table = jsonData.format.tables[tableName];
-                        optimizedJsonData.format.tables[tableName] = {
-                            name: table.name,
-                            tableID: table.tableID,
-                            columns: table.columns?.map(col => ({
-                                name: col.name,
-                                dataType: col.dataType,
-                                columnID: col.columnID
-                            })) || []
-                        };
-                    });
-                }
-                
                 const optimizedSize = JSON.stringify(optimizedJsonData).length;
-                console.log('簡略化後のJSONサイズ:', optimizedSize, '文字');
+                console.log('軽度簡略化後のJSONサイズ:', optimizedSize, '文字');
             }
         }
 
-        // プロンプトの構築
+        // 参考SQLサイズの確認
+        let optimizedReferenceSQLs = referenceSQLs;
+        if (referenceSQLs && referenceSQLs.length > 15000) {
+            console.log('⚠️ 参考SQLサイズが大きいため一部制限');
+            optimizedReferenceSQLs = referenceSQLs.substring(0, 15000) + '\n[参考SQLが多いため一部省略]';
+        }
+
+        // プロンプトの構築（詳細な情報を含める）
         const prompt = `
-以下の情報からSQLクエリを生成してください。
+以下の情報から、詳細で実用的なSQLクエリを生成してください。
 
 【テナント・フォーマット情報】
 - テナントID: ${tenantId || 'なし'}
 - フォーマットID: ${formatId || 'なし'}
 
-【JSONデータ構造】
-${optimizedJsonData ? JSON.stringify(optimizedJsonData, null, 2) : 'なし'}
+【フォーマット詳細】
+フォーマット名: ${optimizedJsonData?.format?.name || 'なし'}
 
-【参考SQL】
-${referenceSQLs || 'なし'}
+【Box項目一覧】（${optimizedJsonData?.format?.boxes?.length || 0}個）
+${optimizedJsonData?.format?.boxes?.map(box => 
+    `- ${box.name} (${box.dataType}) [fieldID: ${box.fieldID}]`
+).join('\n') || 'なし'}
+
+【Table構造】（${Object.keys(optimizedJsonData?.format?.tables || {}).length}個）
+${Object.values(optimizedJsonData?.format?.tables || {}).map(table => 
+    `テーブル: ${table.name} [tableID: ${table.tableID}]
+カラム: ${table.columns?.map(col => `${col.name}(${col.dataType})`).join(', ') || 'なし'}`
+).join('\n\n') || 'なし'}
+
+【参考SQLパターン】
+${optimizedReferenceSQLs || 'なし'}
 
 【追加指示】
 ${additionalInstructions || 'なし'}
 
-【要求】
-上記情報に基づいて、WITH句を使用したSQLクエリを生成してください。
-参考SQLの構造を参考にしながら、実用的で効率的なクエリを作成してください。
+【生成要求】
+上記の詳細な情報に基づいて、WITH句を使用した包括的なSQLクエリを生成してください。
+
+重要なポイント:
+1. 全てのBox項目とTable項目を活用する
+2. 参考SQLの構造とパターンを参考にする  
+3. テナントIDとフォーマットIDを正確に使用する
+4. 実用的で効率的なクエリ構造にする
+5. 適切なJOIN構造を使用する
+
 SQLクエリのみを出力してください。
         `;
 
@@ -115,7 +130,7 @@ SQLクエリのみを出力してください。
             },
             body: JSON.stringify({
                 model: 'claude-3-5-sonnet-20241022',
-                max_tokens: 4000,
+                max_tokens: 6000, // トークン数を増加
                 messages: [{
                     role: 'user',
                     content: prompt
@@ -135,7 +150,7 @@ SQLクエリのみを出力してください。
 
         const data = await response.json();
         console.log('=== SQL生成成功 ===');
-        console.log('レスポンスキー:', Object.keys(data));
+        console.log('レスポンストークン数:', data.usage?.output_tokens || '不明');
         
         return res.status(200).json(data);
 
