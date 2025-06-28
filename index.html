@@ -838,20 +838,15 @@ ${additionalInstructions ? `【追加指示・要望】\n${additionalInstruction
 SQLクエリのみを出力してください。
                 `;
 
-                const response = await fetch('https://api.anthropic.com/v1/messages', {
+                // Netlify Functionsを使用してAPI呼び出し
+                const response = await fetch('/.netlify/functions/generate-sql', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'x-api-key': apiKey,
-                        'anthropic-version': '2023-06-01'
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        model: 'claude-3-sonnet-20240229',
-                        max_tokens: 2000,
-                        messages: [{
-                            role: 'user',
-                            content: prompt
-                        }]
+                        apiKey: apiKey,
+                        prompt: prompt
                     })
                 });
 
