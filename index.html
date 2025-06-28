@@ -1,0 +1,1362 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SQL生成支援アプリ</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .tabs {
+            display: flex;
+            margin-bottom: 30px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 5px;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 12px 20px;
+            background: transparent;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            color: #666;
+        }
+
+        .tab.active {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .section {
+            margin-bottom: 25px;
+            padding: 25px;
+            background: #f8f9fa;
+            border-radius: 15px;
+            border-left: 4px solid #667eea;
+        }
+
+        .section h3 {
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 1.3rem;
+        }
+
+        .upload-area {
+            border: 2px dashed #667eea;
+            border-radius: 10px;
+            padding: 30px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: white;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-area:hover {
+            border-color: #764ba2;
+            background: #f0f4ff;
+            transform: translateY(-2px);
+        }
+
+        .upload-area.dragover {
+            border-color: #28a745;
+            background: #f0fff4;
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .file-info {
+            margin-top: 10px;
+            padding: 10px;
+            background: #e3f2fd;
+            border-radius: 5px;
+            font-size: 0.9rem;
+            color: #1976d2;
+        }
+
+        textarea {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            resize: vertical;
+            transition: border-color 0.3s ease;
+            background: white;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        input[type="text"], input[type="url"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+
+        input[type="text"]:focus, input[type="url"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .button {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 1.1rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .button:active {
+            transform: translateY(0);
+        }
+
+        .button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .button-secondary {
+            background: #6c757d;
+            box-shadow: 0 5px 15px rgba(108, 117, 125, 0.3);
+        }
+
+        .button-danger {
+            background: linear-gradient(135deg, #dc3545, #c82333);
+            box-shadow: 0 5px 15px rgba(220, 53, 69, 0.3);
+        }
+
+        .button-github {
+            background: linear-gradient(135deg, #24292e, #586069);
+            box-shadow: 0 5px 15px rgba(36, 41, 46, 0.3);
+        }
+
+        .generate-section {
+            text-align: center;
+            padding: 30px;
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            border-radius: 15px;
+            margin: 30px 0;
+        }
+
+        .generate-button {
+            font-size: 1.3rem;
+            padding: 20px 40px;
+            background: linear-gradient(135deg, #28a745, #20c997);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(40, 167, 69, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); }
+        }
+
+        .result-area {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 25px;
+            margin-top: 25px;
+        }
+
+        .sql-templates {
+            display: grid;
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .template-item {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s ease;
+        }
+
+        .template-item:hover {
+            transform: translateX(5px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .template-name {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .template-preview {
+            font-family: 'Courier New', monospace;
+            font-size: 0.8rem;
+            color: #666;
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .copy-button {
+            background: #17a2b8;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+
+        .copy-button:hover {
+            background: #138496;
+            transform: scale(1.05);
+        }
+
+        .status-message {
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .github-config {
+            display: grid;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .config-row {
+            display: grid;
+            grid-template-columns: 1fr 3fr;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .connection-status {
+            padding: 10px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .connected {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .disconnected {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .customer-selector {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .customer-card {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            border: 2px solid #e0e0e0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+
+        .customer-card:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .customer-card.selected {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+
+        .github-sql-list {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 15px;
+            background: white;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+                margin: 10px;
+            }
+            
+            h1 {
+                font-size: 2rem;
+            }
+            
+            .tabs {
+                flex-direction: column;
+            }
+
+            .config-row {
+                grid-template-columns: 1fr;
+            }
+
+            .customer-selector {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 SQL生成支援アプリ</h1>
+        
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('generate')">SQL生成</button>
+            <button class="tab" onclick="switchTab('templates')">ローカルSQL管理</button>
+            <button class="tab" onclick="switchTab('saved')">生成SQL履歴</button>
+            <button class="tab" onclick="switchTab('github')">GitHub連携</button>
+        </div>
+
+        <!-- SQL生成タブ -->
+        <div id="generate-tab" class="tab-content active">
+            <div class="section">
+                <h3>📋 帳票画像アップロード</h3>
+                <div class="upload-area" onclick="document.getElementById('imageFile').click()" ondrop="handleDrop(event, 'image')" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+                    <div class="upload-icon">📷</div>
+                    <p>帳票画像をドラッグ&ドロップ、またはクリックして選択</p>
+                    <p style="font-size: 0.9rem; color: #666; margin-top: 5px;">対応形式: JPG, PNG, GIF</p>
+                    <input type="file" id="imageFile" accept="image/*" onchange="handleFileSelect(event, 'image')">
+                    <div id="imageInfo" class="file-info" style="display: none;"></div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h3>📄 JSONデータアップロード</h3>
+                <div class="upload-area" onclick="document.getElementById('jsonFile').click()" ondrop="handleDrop(event, 'json')" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+                    <div class="upload-icon">📊</div>
+                    <p>JSONファイルをドラッグ&ドロップ、またはクリックして選択</p>
+                    <p style="font-size: 0.9rem; color: #666; margin-top: 5px;">対応形式: JSON</p>
+                    <input type="file" id="jsonFile" accept=".json" onchange="handleFileSelect(event, 'json')">
+                    <div id="jsonInfo" class="file-info" style="display: none;"></div>
+                </div>
+                
+                <div style="margin-top: 15px;">
+                    <label for="jsonText"><strong>または直接JSONを入力:</strong></label>
+                    <textarea id="jsonText" rows="8" placeholder='{"example": "data", "key": "value"}'></textarea>
+                </div>
+            </div>
+
+            <div class="section">
+                <h3>🆔 テナント・フォーマット情報</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                    <div>
+                        <label for="tenantId"><strong>テナントID:</strong></label>
+                        <input type="text" id="tenantId" placeholder="例: tenant_001" style="width: 100%; margin-top: 5px; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px;">
+                    </div>
+                    <div>
+                        <label for="formatId"><strong>フォーマットID:</strong></label>
+                        <input type="text" id="formatId" placeholder="例: format_abc123" style="width: 100%; margin-top: 5px; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px;">
+                    </div>
+                </div>
+                <p style="font-size: 0.9rem; color: #666;">SQL生成時に参照されるテナントとフォーマットの識別子です</p>
+            </div>
+
+            <div class="section">
+                <h3>📝 追加指示・要望</h3>
+                <div style="margin-bottom: 15px;">
+                    <label for="additionalInstructions"><strong>SQL生成時の追加指示:</strong></label>
+                    <textarea id="additionalInstructions" rows="4" placeholder="例: 
+- パフォーマンスを重視したクエリにしてください
+- 日付範囲は過去30日間に限定
+- 結果は売上の降順で並び替え
+- 重複データは除外してください
+- COUNTではなくSUMを使用
+- テーブル結合時はLEFT JOINを優先" style="margin-top: 5px;"></textarea>
+                    <p style="font-size: 0.9rem; color: #666; margin-top: 5px;">SQLの出力形式、条件、パフォーマンス要件などを自由に記述できます</p>
+                </div>
+            </div>
+
+            <div class="section">
+                <h3>🔗 Claude API設定</h3>
+                <div style="margin-bottom: 15px;">
+                    <label for="claudeApiKey"><strong>Claude API Key:</strong></label>
+                    <input type="password" id="claudeApiKey" placeholder="sk-ant-api03-..." style="margin-top: 5px;">
+                    <p style="font-size: 0.9rem; color: #666; margin-top: 5px;">APIキーはローカルに保存され、外部に送信されません</p>
+                </div>
+            </div>
+
+            <div class="generate-section">
+                <button class="button generate-button" onclick="generateSQL()">
+                    ✨ SQL生成 ✨
+                </button>
+                <p style="margin-top: 15px; font-size: 0.95rem; color: #666;">
+                    💡 <strong>生成のコツ:</strong><br>
+                    • 具体的な条件や要望を「追加指示」に記載<br>
+                    • 参考SQLを事前に登録・同期しておく<br>
+                    • JSONデータの構造を確認してから実行
+                </p>
+            </div>
+
+            <div id="result" class="result-area" style="display: none;">
+                <h3>🎯 生成されたSQL</h3>
+                <textarea id="generatedSQL" rows="15" readonly></textarea>
+                <div style="margin-top: 15px; text-align: center;">
+                    <button class="button copy-button" onclick="copySQL()">📋 SQLをコピー</button>
+                    <button class="button" onclick="showSaveSQLModal()" style="margin-left: 10px;">💾 SQLを保存</button>
+                </div>
+            </div>
+
+            <div id="statusMessage" class="status-message" style="display: none;"></div>
+        </div>
+
+        <!-- 生成SQL履歴タブ -->
+        <div id="saved-tab" class="tab-content">
+            <div class="section">
+                <h3>🔍 SQL検索・フィルター</h3>
+                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 15px; margin-bottom: 20px;">
+                    <input type="text" id="sqlSearchInput" placeholder="SQL名前やキーワードで検索..." onkeyup="searchSavedSQL()">
+                    <select id="categoryFilter" onchange="filterByCategory()">
+                        <option value="">全カテゴリ</option>
+                        <option value="集計系">集計系</option>
+                        <option value="抽出系">抽出系</option>
+                        <option value="結合系">結合系</option>
+                        <option value="分析系">分析系</option>
+                        <option value="レポート系">レポート系</option>
+                        <option value="その他">その他</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="section">
+                <h3>📊 保存されたSQL履歴</h3>
+                <div style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+                    <span id="savedSQLCount" style="color: #666;">0件のSQLが保存されています</span>
+                    <button class="button button-danger" onclick="clearAllSavedSQL()" style="padding: 8px 15px; font-size: 0.9rem;">🗑️ 全て削除</button>
+                </div>
+                <div id="savedSQLList" class="sql-templates">
+                    <!-- 保存されたSQL一覧がここに表示される -->
+                </div>
+            </div>
+        </div>
+
+        <!-- ローカルSQL管理タブ -->
+        <div id="templates-tab" class="tab-content">
+            <div class="section">
+                <h3>📚 新しい参考SQLを追加</h3>
+                <div style="margin-bottom: 15px;">
+                    <label for="templateName"><strong>テンプレート名:</strong></label>
+                    <input type="text" id="templateName" style="margin-top: 5px;" placeholder="例: 売上集計クエリ">
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <label for="templateSQL"><strong>SQL:</strong></label>
+                    <textarea id="templateSQL" rows="10" placeholder="SELECT * FROM table_name WHERE condition;"></textarea>
+                </div>
+                <button class="button" onclick="addTemplate()">➕ テンプレートを追加</button>
+            </div>
+
+            <div class="section">
+                <h3>💾 保存済み参考SQL</h3>
+                <div id="templatesList" class="sql-templates">
+                    <!-- テンプレート一覧がここに表示される -->
+                </div>
+            </div>
+        </div>
+
+        <!-- GitHub連携タブ -->
+        <div id="github-tab" class="tab-content">
+            <div class="section">
+                <h3>🐙 GitHub設定</h3>
+                <div class="github-config">
+                    <div class="config-row">
+                        <label><strong>リポジトリURL:</strong></label>
+                        <input type="url" id="githubRepo" placeholder="https://github.com/username/genvanote-sql-for-customer">
+                    </div>
+                    <div class="config-row">
+                        <label><strong>Personal Access Token:</strong></label>
+                        <input type="password" id="githubToken" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
+                    </div>
+                    <div class="config-row">
+                        <label><strong>ブランチ:</strong></label>
+                        <input type="text" id="githubBranch" value="main" placeholder="main">
+                    </div>
+                </div>
+                
+                <div style="text-align: center; margin: 20px 0;">
+                    <button class="button button-github" onclick="connectGitHub()">🔗 GitHub接続テスト</button>
+                </div>
+                
+                <div id="connectionStatus" class="connection-status disconnected">
+                    未接続
+                </div>
+            </div>
+
+            <div class="section" id="customerSection" style="display: none;">
+                <h3>🏢 顧客選択</h3>
+                <div id="customerSelector" class="customer-selector">
+                    <!-- 顧客一覧がここに表示される -->
+                </div>
+            </div>
+
+            <div class="section" id="githubSqlSection" style="display: none;">
+                <h3>📁 GitHub SQL一覧</h3>
+                <div style="margin-bottom: 15px; text-align: center;">
+                    <button class="button" onclick="syncGitHubSQL()">🔄 SQLファイル同期</button>
+                </div>
+                <div id="githubSqlList" class="github-sql-list">
+                    <!-- GitHubのSQL一覧がここに表示される -->
+                </div>
+            </div>
+        </div>
+
+        <!-- SQL保存モーダル -->
+        <div id="saveSQLModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; backdrop-filter: blur(5px);">
+            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 15px; box-shadow: 0 20px 40px rgba(0,0,0,0.2); max-width: 500px; width: 90%;">
+                <h3 style="margin-bottom: 20px; color: #333;">💾 SQLを保存</h3>
+                <div style="margin-bottom: 15px;">
+                    <label><strong>SQL名前:</strong></label>
+                    <input type="text" id="saveSQLName" placeholder="例: 売上月次集計クエリ" style="width: 100%; margin-top: 5px; padding: 10px; border: 2px solid #e0e0e0; border-radius: 5px;">
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <label><strong>カテゴリ:</strong></label>
+                    <select id="saveSQLCategory" style="width: 100%; margin-top: 5px; padding: 10px; border: 2px solid #e0e0e0; border-radius: 5px;">
+                        <option value="集計系">集計系</option>
+                        <option value="抽出系">抽出系</option>
+                        <option value="結合系">結合系</option>
+                        <option value="分析系">分析系</option>
+                        <option value="レポート系">レポート系</option>
+                        <option value="その他">その他</option>
+                    </select>
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label><strong>メモ:</strong></label>
+                    <textarea id="saveSQLMemo" rows="3" placeholder="このSQLの用途や注意点など..." style="width: 100%; margin-top: 5px; padding: 10px; border: 2px solid #e0e0e0; border-radius: 5px; resize: vertical;"></textarea>
+                </div>
+                <div style="text-align: center;">
+                    <button class="button" onclick="saveSQLToHistory()" style="margin-right: 10px;">💾 保存</button>
+                    <button class="button button-secondary" onclick="closeSaveSQLModal()">キャンセル</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let uploadedImage = null;
+        let uploadedJSON = null;
+        let templates = JSON.parse(localStorage.getItem('sqlTemplates') || '[]');
+        let savedSQLs = JSON.parse(localStorage.getItem('savedSQLs') || '[]');
+        let githubConfig = JSON.parse(localStorage.getItem('githubConfig') || '{}');
+        let githubSqlFiles = JSON.parse(localStorage.getItem('githubSqlFiles') || '[]');
+        let selectedCustomer = localStorage.getItem('selectedCustomer') || '';
+
+        // タブ切り替え
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            document.querySelector(`[onclick="switchTab('${tabName}')"]`).classList.add('active');
+            document.getElementById(`${tabName}-tab`).classList.add('active');
+            
+            if (tabName === 'templates') {
+                displayTemplates();
+            } else if (tabName === 'saved') {
+                displaySavedSQL();
+            } else if (tabName === 'github') {
+                loadGitHubConfig();
+                displayGitHubSQL();
+            }
+        }
+
+        // ドラッグ&ドロップ処理
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.currentTarget.classList.add('dragover');
+        }
+
+        function handleDragLeave(e) {
+            e.currentTarget.classList.remove('dragover');
+        }
+
+        function handleDrop(e, type) {
+            e.preventDefault();
+            e.currentTarget.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0], type);
+            }
+        }
+
+        // ファイル選択処理
+        function handleFileSelect(e, type) {
+            const file = e.target.files[0];
+            if (file) {
+                handleFile(file, type);
+            }
+        }
+
+        // ファイル処理
+        function handleFile(file, type) {
+            if (type === 'image') {
+                if (!file.type.startsWith('image/')) {
+                    showStatus('画像ファイルを選択してください', 'error');
+                    return;
+                }
+                uploadedImage = file;
+                document.getElementById('imageInfo').innerHTML = `✅ ${file.name} (${(file.size/1024/1024).toFixed(2)}MB)`;
+                document.getElementById('imageInfo').style.display = 'block';
+            } else if (type === 'json') {
+                if (!file.name.toLowerCase().endsWith('.json')) {
+                    showStatus('JSONファイルを選択してください', 'error');
+                    return;
+                }
+                
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const jsonData = JSON.parse(e.target.result);
+                        uploadedJSON = jsonData;
+                        document.getElementById('jsonText').value = JSON.stringify(jsonData, null, 2);
+                        document.getElementById('jsonInfo').innerHTML = `✅ ${file.name} (${(file.size/1024).toFixed(2)}KB)`;
+                        document.getElementById('jsonInfo').style.display = 'block';
+                    } catch (error) {
+                        showStatus('有効なJSONファイルではありません', 'error');
+                    }
+                };
+                reader.readAsText(file);
+            }
+        }
+
+        // SQL生成（実際のClaude API呼び出し）
+        async function generateSQL() {
+            const jsonText = document.getElementById('jsonText').value;
+            const apiKey = document.getElementById('claudeApiKey').value;
+            const additionalInstructions = document.getElementById('additionalInstructions').value.trim();
+            const tenantId = document.getElementById('tenantId').value.trim();
+            const formatId = document.getElementById('formatId').value.trim();
+            
+            if (!uploadedImage && !jsonText) {
+                showStatus('帳票画像またはJSONデータを入力してください', 'error');
+                return;
+            }
+
+            if (!apiKey) {
+                // APIキーがない場合はデモ版として動作
+                showStatus('APIキーが未設定のため、デモ版SQL生成を実行中...', 'success');
+                setTimeout(() => {
+                    const demoSQL = generateDemoSQL(JSON.parse(jsonText || '{}'), additionalInstructions, tenantId, formatId);
+                    document.getElementById('generatedSQL').value = demoSQL;
+                    document.getElementById('result').style.display = 'block';
+                    showStatus('デモ版SQLが生成されました（実際のAI生成にはAPIキーが必要です）', 'success');
+                    document.getElementById('result').scrollIntoView({ behavior: 'smooth' });
+                }, 2000);
+                return;
+            }
+
+            // JSONデータの解析を試行
+            let jsonData = null;
+            if (jsonText) {
+                try {
+                    jsonData = JSON.parse(jsonText);
+                } catch (e) {
+                    showStatus('JSONデータが正しくありません', 'error');
+                    return;
+                }
+            }
+
+            showStatus('AI SQL生成中...', 'success');
+
+            try {
+                // 参考SQLの準備
+                let referenceSQLs = '';
+                if (templates.length > 0) {
+                    referenceSQLs += '\n【ローカル参考SQL】\n';
+                    templates.forEach(template => {
+                        referenceSQLs += `--- ${template.name} ---\n${template.sql}\n\n`;
+                    });
+                }
+
+                if (githubSqlFiles.length > 0 && selectedCustomer) {
+                    const customerSQLs = githubSqlFiles.filter(file => 
+                        file.path.includes(`/customer/${selectedCustomer}/`)
+                    );
+                    if (customerSQLs.length > 0) {
+                        referenceSQLs += `\n【GitHub参考SQL (${selectedCustomer})】\n`;
+                        customerSQLs.forEach(file => {
+                            referenceSQLs += `--- ${file.name} ---\n${file.content}\n\n`;
+                        });
+                    }
+                }
+
+                // プロンプトに追加指示を含める
+                const prompt = `
+以下の情報を基に、適切なSQLクエリを生成してください。
+
+【JSONデータ】
+${jsonText || 'なし'}
+
+【帳票画像】
+${uploadedImage ? `アップロード済み: ${uploadedImage.name}` : 'なし'}
+
+【テナントID】
+${tenantId || 'なし'}
+
+【フォーマットID】
+${formatId || 'なし'}
+
+【参考SQL】
+${referenceSQLs || 'なし'}
+
+${additionalInstructions ? `【追加指示・要望】\n${additionalInstructions}\n` : ''}
+
+【基本要求】
+- 提供されたJSONデータの構造を分析してください
+- 帳票画像から読み取れる情報を考慮してください
+- テナントIDとフォーマットIDを適切にSQL内で活用してください
+- 参考SQLのパターンを活用してください
+- 上記の追加指示・要望を必ず考慮してください
+- 実用的で効率的なSQLクエリを生成してください
+- コメントを含めて、わかりやすく記述してください
+
+SQLクエリのみを出力してください。
+                `;
+
+                const response = await fetch('https://api.anthropic.com/v1/messages', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': apiKey,
+                        'anthropic-version': '2023-06-01'
+                    },
+                    body: JSON.stringify({
+                        model: 'claude-3-sonnet-20240229',
+                        max_tokens: 2000,
+                        messages: [{
+                            role: 'user',
+                            content: prompt
+                        }]
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API Error: ${response.status}`);
+                }
+
+                const data = await response.json();
+                const generatedSQL = data.content[0].text;
+
+                document.getElementById('generatedSQL').value = generatedSQL;
+                document.getElementById('result').style.display = 'block';
+                showStatus('AI SQLが正常に生成されました！', 'success');
+                
+                // APIキーをローカルに保存
+                localStorage.setItem('claudeApiKey', apiKey);
+                
+                // 結果エリアにスクロール
+                document.getElementById('result').scrollIntoView({ behavior: 'smooth' });
+
+            } catch (error) {
+                console.error('Error:', error);
+                showStatus('SQL生成中にエラーが発生しました: ' + error.message, 'error');
+            }
+        }
+
+        // SQLコピー
+        function copySQL() {
+            const sqlText = document.getElementById('generatedSQL').value;
+            navigator.clipboard.writeText(sqlText).then(() => {
+                showStatus('SQLをクリップボードにコピーしました！', 'success');
+            });
+        }
+
+        // ステータスメッセージ表示
+        function showStatus(message, type) {
+            const statusEl = document.getElementById('statusMessage');
+            statusEl.textContent = message;
+            statusEl.className = `status-message status-${type}`;
+            statusEl.style.display = 'block';
+            
+            setTimeout(() => {
+                statusEl.style.display = 'none';
+            }, 5000);
+        }
+
+        // 生成SQL保存関連
+        function showSaveSQLModal() {
+            const generatedSQL = document.getElementById('generatedSQL').value;
+            if (!generatedSQL.trim()) {
+                showStatus('保存するSQLがありません', 'error');
+                return;
+            }
+            
+            // モーダルを表示
+            document.getElementById('saveSQLModal').style.display = 'block';
+            document.getElementById('saveSQLName').focus();
+        }
+
+        function closeSaveSQLModal() {
+            document.getElementById('saveSQLModal').style.display = 'none';
+            // フォームリセット
+            document.getElementById('saveSQLName').value = '';
+            document.getElementById('saveSQLCategory').value = '集計系';
+            document.getElementById('saveSQLMemo').value = '';
+        }
+
+        function saveSQLToHistory() {
+            const name = document.getElementById('saveSQLName').value.trim();
+            const category = document.getElementById('saveSQLCategory').value;
+            const memo = document.getElementById('saveSQLMemo').value.trim();
+            const sql = document.getElementById('generatedSQL').value;
+
+            if (!name) {
+                showStatus('SQL名前を入力してください', 'error');
+                return;
+            }
+
+            const savedSQL = {
+                id: Date.now(),
+                name: name,
+                category: category,
+                sql: sql,
+                memo: memo,
+                createdAt: new Date().toLocaleString('ja-JP'),
+                usedImage: uploadedImage ? uploadedImage.name : null,
+                usedJSON: uploadedJSON ? 'あり' : null,
+                tenantId: document.getElementById('tenantId').value.trim() || null,
+                formatId: document.getElementById('formatId').value.trim() || null,
+                additionalInstructions: document.getElementById('additionalInstructions').value.trim() || null
+            };
+
+            savedSQLs.push(savedSQL);
+            localStorage.setItem('savedSQLs', JSON.stringify(savedSQLs));
+
+            closeSaveSQLModal();
+            showStatus('SQLを保存しました！', 'success');
+        }
+
+        function displaySavedSQL() {
+            const listEl = document.getElementById('savedSQLList');
+            const countEl = document.getElementById('savedSQLCount');
+            
+            // 検索・フィルター適用
+            let filteredSQLs = savedSQLs;
+            
+            const searchTerm = document.getElementById('sqlSearchInput') ? document.getElementById('sqlSearchInput').value.toLowerCase() : '';
+            const categoryFilter = document.getElementById('categoryFilter') ? document.getElementById('categoryFilter').value : '';
+            
+            if (searchTerm) {
+                filteredSQLs = filteredSQLs.filter(sql => 
+                    sql.name.toLowerCase().includes(searchTerm) ||
+                    sql.sql.toLowerCase().includes(searchTerm) ||
+                    (sql.memo && sql.memo.toLowerCase().includes(searchTerm))
+                );
+            }
+            
+            if (categoryFilter) {
+                filteredSQLs = filteredSQLs.filter(sql => sql.category === categoryFilter);
+            }
+
+            countEl.textContent = `${filteredSQLs.length}件のSQLが保存されています`;
+            
+            if (filteredSQLs.length === 0) {
+                listEl.innerHTML = '<p style="text-align: center; color: #666;">まだSQLが保存されていません</p>';
+                return;
+            }
+            
+            // 新しい順にソート
+            filteredSQLs.sort((a, b) => b.id - a.id);
+            
+            listEl.innerHTML = filteredSQLs.map(sql => `
+                <div class="template-item" style="flex-direction: column; align-items: stretch;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+                        <div style="flex: 1;">
+                            <div class="template-name">${sql.name}</div>
+                            <div style="margin: 5px 0;">
+                                <span style="background: #667eea; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem;">${sql.category}</span>
+                                ${sql.usedImage ? `<span style="background: #28a745; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; margin-left: 5px;">📷 画像使用</span>` : ''}
+                                ${sql.usedJSON ? `<span style="background: #17a2b8; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; margin-left: 5px;">📊 JSON使用</span>` : ''}
+                                ${sql.additionalInstructions ? `<span style="background: #fd7e14; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; margin-left: 5px;">📝 指示あり</span>` : ''}
+                            </div>
+                            ${sql.memo ? `<div style="color: #666; font-size: 0.9rem; margin-top: 5px;">💭 ${sql.memo}</div>` : ''}
+                            <small style="color: #999;">作成日: ${sql.createdAt}</small>
+                        </div>
+                        <div style="display: flex; gap: 10px;">
+                            <button class="copy-button" onclick="copySavedSQL('${sql.id}')">コピー</button>
+                            <button class="button button-secondary" onclick="viewSavedSQL('${sql.id}')" style="padding: 8px 15px; font-size: 0.9rem;">表示</button>
+                            <button class="button button-danger" onclick="deleteSavedSQL('${sql.id}')" style="padding: 8px 15px; font-size: 0.9rem;">削除</button>
+                        </div>
+                    </div>
+                    <div class="template-preview" style="max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 10px; background: #f8f9fa; border-radius: 5px; margin-top: 10px;">${sql.sql}</div>
+                </div>
+            `).join('');
+        }
+
+        function searchSavedSQL() {
+            displaySavedSQL();
+        }
+
+        function filterByCategory() {
+            displaySavedSQL();
+        }
+
+        function copySavedSQL(id) {
+            const sql = savedSQLs.find(s => s.id == id);
+            if (sql) {
+                navigator.clipboard.writeText(sql.sql).then(() => {
+                    showStatus('保存されたSQLをクリップボードにコピーしました！', 'success');
+                });
+            }
+        }
+
+        function viewSavedSQL(id) {
+            const sql = savedSQLs.find(s => s.id == id);
+            if (sql) {
+                // SQL生成タブに移動して結果表示
+                switchTab('generate');
+                document.getElementById('generatedSQL').value = sql.sql;
+                document.getElementById('result').style.display = 'block';
+                document.getElementById('result').scrollIntoView({ behavior: 'smooth' });
+                showStatus(`「${sql.name}」を表示しました`, 'success');
+            }
+        }
+
+        function deleteSavedSQL(id) {
+            const sql = savedSQLs.find(s => s.id == id);
+            if (sql && confirm(`「${sql.name}」を削除しますか？`)) {
+                savedSQLs = savedSQLs.filter(s => s.id != id);
+                localStorage.setItem('savedSQLs', JSON.stringify(savedSQLs));
+                displaySavedSQL();
+                showStatus('SQLを削除しました', 'success');
+            }
+        }
+
+        function clearAllSavedSQL() {
+            if (confirm('保存された全てのSQLを削除しますか？この操作は取り消せません。')) {
+                savedSQLs = [];
+                localStorage.setItem('savedSQLs', JSON.stringify(savedSQLs));
+                displaySavedSQL();
+                showStatus('全てのSQLを削除しました', 'success');
+            }
+        }
+
+        // ローカルテンプレート関連
+        function addTemplate() {
+            const name = document.getElementById('templateName').value.trim();
+            const sql = document.getElementById('templateSQL').value.trim();
+            
+            if (!name || !sql) {
+                showStatus('テンプレート名とSQLを入力してください', 'error');
+                return;
+            }
+            
+            const template = {
+                id: Date.now(),
+                name: name,
+                sql: sql,
+                createdAt: new Date().toLocaleString('ja-JP')
+            };
+            
+            templates.push(template);
+            localStorage.setItem('sqlTemplates', JSON.stringify(templates));
+            
+            document.getElementById('templateName').value = '';
+            document.getElementById('templateSQL').value = '';
+            
+            displayTemplates();
+            showStatus('テンプレートを追加しました！', 'success');
+        }
+
+        function displayTemplates() {
+            const listEl = document.getElementById('templatesList');
+            
+            if (templates.length === 0) {
+                listEl.innerHTML = '<p style="text-align: center; color: #666;">まだテンプレートがありません</p>';
+                return;
+            }
+            
+            listEl.innerHTML = templates.map(template => `
+                <div class="template-item">
+                    <div>
+                        <div class="template-name">${template.name}</div>
+                        <div class="template-preview">${template.sql}</div>
+                        <small style="color: #999;">作成日: ${template.createdAt}</small>
+                    </div>
+                    <div>
+                        <button class="copy-button" onclick="copyTemplate('${template.id}')">コピー</button>
+                        <button class="button button-danger" style="margin-left: 10px; padding: 8px 15px; font-size: 0.9rem;" onclick="deleteTemplate('${template.id}')">削除</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function copyTemplate(id) {
+            const template = templates.find(t => t.id == id);
+            if (template) {
+                navigator.clipboard.writeText(template.sql).then(() => {
+                    showStatus('テンプレートをクリップボードにコピーしました！', 'success');
+                });
+            }
+        }
+
+        function deleteTemplate(id) {
+            if (confirm('このテンプレートを削除しますか？')) {
+                templates = templates.filter(t => t.id != id);
+                localStorage.setItem('sqlTemplates', JSON.stringify(templates));
+                displayTemplates();
+                showStatus('テンプレートを削除しました', 'success');
+            }
+        }
+
+        // GitHub関連
+        function loadGitHubConfig() {
+            if (githubConfig.repo) {
+                document.getElementById('githubRepo').value = githubConfig.repo;
+            }
+            if (githubConfig.token) {
+                document.getElementById('githubToken').value = githubConfig.token;
+            }
+            if (githubConfig.branch) {
+                document.getElementById('githubBranch').value = githubConfig.branch;
+            }
+            
+            updateConnectionStatus();
+        }
+
+        async function connectGitHub() {
+            const repo = document.getElementById('githubRepo').value.trim();
+            const token = document.getElementById('githubToken').value.trim();
+            const branch = document.getElementById('githubBranch').value.trim() || 'main';
+
+            if (!repo || !token) {
+                showStatus('リポジトリURLとアクセストークンを入力してください', 'error');
+                return;
+            }
+
+            // GitHub URLからowner/repoを抽出
+            const match = repo.match(/github\.com\/([^\/]+)\/([^\/]+)/);
+            if (!match) {
+                showStatus('正しいGitHubリポジトリURLを入力してください', 'error');
+                return;
+            }
+
+            const [, owner, repoName] = match;
+            
+            try {
+                showStatus('GitHub接続中...', 'success');
+                
+                // リポジトリの存在確認
+                const response = await fetch(`https://api.github.com/repos/${owner}/${repoName}`, {
+                    headers: {
+                        'Authorization': `token ${token}`,
+                        'Accept': 'application/vnd.github.v3+json'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('リポジトリにアクセスできません');
+                }
+
+                // 設定を保存
+                githubConfig = { repo, token, branch, owner, repoName };
+                localStorage.setItem('githubConfig', JSON.stringify(githubConfig));
+                
+                updateConnectionStatus();
+                await loadCustomers();
+                
+                showStatus('GitHub接続が完了しました！', 'success');
+
+            } catch (error) {
+                showStatus('GitHub接続エラー: ' + error.message, 'error');
+            }
+        }
+
+        function updateConnectionStatus() {
+            const statusEl = document.getElementById('connectionStatus');
+            const customerSection = document.getElementById('customerSection');
+            const sqlSection = document.getElementById('githubSqlSection');
+            
+            if (githubConfig.repo && githubConfig.token) {
+                statusEl.textContent = `接続済み: ${githubConfig.repo}`;
+                statusEl.className = 'connection-status connected';
+                customerSection.style.display = 'block';
+                sqlSection.style.display = 'block';
+            } else {
+                statusEl.textContent = '未接続';
+                statusEl.className = 'connection-status disconnected';
+                customerSection.style.display = 'none';
+                sqlSection.style.display = 'none';
+            }
+        }
+
+        async function loadCustomers() {
+            if (!githubConfig.owner || !githubConfig.repoName || !githubConfig.token) return;
+
+            try {
+                const response = await fetch(
+                    `https://api.github.com/repos/${githubConfig.owner}/${githubConfig.repoName}/contents/sql/customer?ref=${githubConfig.branch}`,
+                    {
+                        headers: {
+                            'Authorization': `token ${githubConfig.token}`,
+                            'Accept': 'application/vnd.github.v3+json'
+                        }
+                    }
+                );
+
+                if (!response.ok) {
+                    throw new Error('顧客フォルダの取得に失敗しました');
+                }
+
+                const data = await response.json();
+                const customers = data.filter(item => item.type === 'dir').map(item => item.name);
+                
+                displayCustomers(customers);
+
+            } catch (error) {
+                showStatus('顧客一覧の取得エラー: ' + error.message, 'error');
+            }
+        }
+
+        function displayCustomers(customers) {
+            const selectorEl = document.getElementById('customerSelector');
+            
+            selectorEl.innerHTML = customers.map(customer => `
+                <div class="customer-card ${customer === selectedCustomer ? 'selected' : ''}" 
+                     onclick="selectCustomer('${customer}')">
+                    <strong>${customer}</strong>
+                </div>
+            `).join('');
+        }
+
+        function selectCustomer(customer) {
+            selectedCustomer = customer;
+            localStorage.setItem('selectedCustomer', customer);
+            
+            document.querySelectorAll('.customer-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            event.target.closest('.customer-card').classList.add('selected');
+            
+            syncGitHubSQL();
+        }
+
+        async function syncGitHubSQL() {
+            if (!selectedCustomer || !githubConfig.owner || !githubConfig.repoName || !githubConfig.token) {
+                showStatus('顧客を選択してください', 'error');
+                return;
+            }
+
+            const listEl = document.getElementById('githubSqlList');
+            listEl.innerHTML = '<div class="loading"><div class="spinner"></div>SQLファイルを読み込み中...</div>';
+
+            try {
+                const response = await fetch(
+                    `https://api.github.com/repos/${githubConfig.owner}/${githubConfig.repoName}/contents/sql/customer/${selectedCustomer}?ref=${githubConfig.branch}`,
+                    {
+                        headers: {
+                            'Authorization': `token ${githubConfig.token}`,
+                            'Accept': 'application/vnd.github.v3+json'
+                        }
+                    }
+                );
+
+                if (!response.ok) {
+                    throw new Error('SQLファイルの取得に失敗しました');
+                }
+
+                const data = await response.json();
+                const sqlFiles = data.filter(item => item.name.endsWith('.sql'));
+                
+                // ファイル内容を取得
+                const filesWithContent = await Promise.all(
+                    sqlFiles.map(async file => {
+                        const contentResponse = await fetch(file.download_url);
+                        const content = await contentResponse.text();
+                        return {
+                            name: file.name,
+                            path: file.path,
+                            content: content,
+                            size: file.size,
+                            lastModified: new Date(file.sha).toLocaleString('ja-JP')
+                        };
+                    })
+                );
+
+                githubSqlFiles = filesWithContent;
+                localStorage.setItem('githubSqlFiles', JSON.stringify(githubSqlFiles));
+                
+                displayGitHubSQL();
+                showStatus(`${selectedCustomer}のSQLファイル ${filesWithContent.length}件を同期しました`, 'success');
+
+            } catch (error) {
+                listEl.innerHTML = '<p style="text-align: center; color: #666;">SQLファイルの読み込みに失敗しました</p>';
+                showStatus('SQLファイル同期エラー: ' + error.message, 'error');
+            }
+        }
+
+        function displayGitHubSQL() {
+            const listEl = document.getElementById('githubSqlList');
+            
+            if (githubSqlFiles.length === 0) {
+                listEl.innerHTML = '<p style="text-align: center; color: #666;">SQLファイルがありません</p>';
+                return;
+            }
+
+            const customerFiles = githubSqlFiles.filter(file => 
+                !selectedCustomer || file.path.includes(`/customer/${selectedCustomer}/`)
+            );
+
+            listEl.innerHTML = customerFiles.map(file => `
+                <div class="template-item">
+                    <div>
+                        <div class="template-name">📁 ${file.name}</div>
+                        <div class="template-preview">${file.content}</div>
+                        <small style="color: #999;">サイズ: ${(file.size/1024).toFixed(2)}KB | パス: ${file.path}</small>
+                    </div>
+                    <div>
+                        <button class="copy-button" onclick="copyGitHubSQL('${file.name}')">コピー</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function copyGitHubSQL(fileName) {
+            const file = githubSqlFiles.find(f => f.name === fileName);
+            if (file) {
+                navigator.clipboard.writeText(file.content).then(() => {
+                    showStatus('GitHubのSQLをクリップボードにコピーしました！', 'success');
+                });
+            }
+        }
+
+        // 初期化
+        document.addEventListener('DOMContentLoaded', () => {
+            displayTemplates();
+            displaySavedSQL();
+            loadGitHubConfig();
+            
+            // 保存されたAPIキーがあれば復元
+            const savedApiKey = localStorage.getItem('claudeApiKey');
+            if (savedApiKey) {
+                document.getElementById('claudeApiKey').value = savedApiKey;
+            }
+        });
+    </script>
+</body>
+</html>
