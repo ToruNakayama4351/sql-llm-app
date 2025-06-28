@@ -1116,61 +1116,59 @@ async function generateSQL() {
         }
 
         function displaySavedSQL() {
-            const listEl = document.getElementById('savedSQLList');
-            const countEl = document.getElementById('savedSQLCount');
-            
-            // 検索・フィルター適用
-            let filteredSQLs = savedSQLs;
-            
-            const searchTerm = document.getElementById('sqlSearchInput') ? document.getElementById('sqlSearchInput').value.toLowerCase() : '';
-            const categoryFilter = document.getElementById('categoryFilter') ? document.getElementById('categoryFilter').value : '';
-            
-            if (searchTerm) {
-                filteredSQLs = filteredSQLs.filter(sql => 
-                    sql.name.toLowerCase().includes(searchTerm) ||
-                    sql.sql.toLowerCase().includes(searchTerm) ||
-                    (sql.memo && sql.memo.toLowerCase().includes(searchTerm))
-                );
-            }
-            
-            if (categoryFilter) {
-                filteredSQLs = filteredSQLs.filter(sql => sql.category === categoryFilter);
-            }
+    const listEl = document.getElementById('savedSQLList');
+    const countEl = document.getElementById('savedSQLCount');
+    
+    // 検索・フィルター適用
+    let filteredSQLs = savedSQLs;
+    
+    const searchTerm = document.getElementById('sqlSearchInput') ? document.getElementById('sqlSearchInput').value.toLowerCase() : '';
+    const categoryFilter = document.getElementById('categoryFilter') ? document.getElementById('categoryFilter').value : '';
+    
+    if (searchTerm) {
+        filteredSQLs = filteredSQLs.filter(sql => 
+            sql.name.toLowerCase().includes(searchTerm) ||
+            sql.sql.toLowerCase().includes(searchTerm) ||
+            (sql.memo && sql.memo.toLowerCase().includes(searchTerm))
+        );
+    }
+    
+    if (categoryFilter) {
+        filteredSQLs = filteredSQLs.filter(sql => sql.category === categoryFilter);
+    }
 
-            countEl.textContent = `${filteredSQLs.length}件のSQLが保存されています`;
-            
-            if (filteredSQLs.length === 0) {
-                listEl.innerHTML = '<p style="text-align: center; color: #666;">まだSQLが保存されていません</p>';
-                return;
-            }
-            
-            // 新しい順にソート
-            filteredSQLs.sort((a, b) => b.id - a.id);
-            
-            listEl.innerHTML = filteredSQLs.map(sql => `
-                <div class="template-item" style="flex-direction: column; align-items: stretch;">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
-                        <div style="flex: 1;">
-                            <div class="template-name">${sql.name}</div>
-                            <div style="margin: 5px 0;">
-                                <span style="background: #667eea; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem;">${sql.category}</span>
-                                ${sql.usedImage ? `<span style="background: #28a745; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; margin-left: 5px;">📷 画像使用</span>` : ''}
-                                ${sql.usedJSON ? `<span style="background: #17a2b8; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; margin-left: 5px;">📊 JSON使用</span>` : ''}
-                                ${sql.additionalInstructions ? `<span style="background: #fd7e14; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; margin-left: 5px;">📝 指示あり</span>` : ''}
-                            </div>
-                            ${sql.memo ? `<div style="color: #666; font-size: 0.9rem; margin-top: 5px;">💭 ${sql.memo}</div>` : ''}
-                            <small style="color: #999;">作成日: ${sql.createdAt}</small>
-                        </div>
-                        <div style="display: flex; gap: 10px;">
-                            <button class="copy-button" onclick="copySavedSQL('${sql.id}')">コピー</button>
-                            <button class="button button-secondary" onclick="viewSavedSQL('${sql.id}')" style="padding: 8px 15px; font-size: 0.9rem;">表示</button>
-                            <button class="button button-danger" onclick="deleteSavedSQL('${sql.id}')" style="padding: 8px 15px; font-size: 0.9rem;">削除</button>
-                        </div>
-                    </div>
-                    <div class="template-preview" style="max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 10px; background: #f8f9fa; border-radius: 5px; margin-top: 10px;">${sql.sql}</div>
+    countEl.textContent = `${filteredSQLs.length}件のSQLが保存されています`;
+    
+    if (filteredSQLs.length === 0) {
+        listEl.innerHTML = '<p style="text-align: center; color: #666;">まだSQLが保存されていません</p>';
+        return;
+    }
+    
+    // 新しい順にソート
+    filteredSQLs.sort((a, b) => b.id - a.id);
+    
+    listEl.innerHTML = filteredSQLs.map(sql => `
+        <div class="template-item">
+            <div>
+                <div class="template-name">${sql.name}</div>
+                <div style="margin: 5px 0;">
+                    <span style="background: #667eea; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem;">${sql.category}</span>
+                    ${sql.usedImage ? `<span style="background: #28a745; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; margin-left: 5px;">📷 画像使用</span>` : ''}
+                    ${sql.usedJSON ? `<span style="background: #17a2b8; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; margin-left: 5px;">📊 JSON使用</span>` : ''}
+                    ${sql.additionalInstructions ? `<span style="background: #fd7e14; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; margin-left: 5px;">📝 指示あり</span>` : ''}
                 </div>
-            `).join('');
-        }
+                ${sql.memo ? `<div style="color: #666; font-size: 0.9rem; margin-top: 5px;">💭 ${sql.memo}</div>` : ''}
+                <div class="template-preview">${sql.sql}</div>
+                <small style="color: #999;">作成日: ${sql.createdAt}</small>
+            </div>
+            <div>
+                <button class="copy-button" onclick="copySavedSQL('${sql.id}')">コピー</button>
+                <button class="button button-secondary" style="margin-left: 10px; padding: 8px 15px; font-size: 0.9rem;" onclick="viewSavedSQL('${sql.id}')">表示</button>
+                <button class="button button-danger" style="margin-left: 10px; padding: 8px 15px; font-size: 0.9rem;" onclick="deleteSavedSQL('${sql.id}')">削除</button>
+            </div>
+        </div>
+    `).join('');
+}
 
         function searchSavedSQL() {
             displaySavedSQL();
