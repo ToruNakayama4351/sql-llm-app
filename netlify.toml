@@ -3,6 +3,8 @@
 
 [functions]
   node_bundler = "esbuild"
+  # タイムアウトを60秒に延長（大きなJSONファイル対応）
+  timeout = 60
 
 [[headers]]
   for = "/*"
