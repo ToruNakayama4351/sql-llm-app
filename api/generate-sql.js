@@ -1,4 +1,4 @@
-const MAX_JSON_SIZE = 25000; // 25KB制限に縮小
+const MAX_JSON_SIZE = 25000; // 25KB制限
 
 // JSONデータを段階的に簡略化する関数
 function optimizeJSONForSQL(jsonData) {
@@ -130,14 +130,28 @@ exports.handler = async (event, context) => {
     }
 
     try {
-        const { apiKey, prompt, jsonData, tenantId, formatId, referenceSQLs, additionalInstructions } = JSON.parse(event.body);
+        const body = JSON.parse(event.body);
+        console.log('受信データ:', Object.keys(body));
 
-        // プロンプトを最適化
-        let optimizedPrompt;
-        if (jsonData) {
+        // 新しいデータ形式と古いデータ形式の両方に対応
+        let apiKey, optimizedPrompt;
+
+        if (body.jsonData !== undefined) {
+            // 新しいデータ形式
+            console.log('新しいデータ形式で処理');
+            const { apiKey: key, jsonData, tenantId, formatId, referenceSQLs, additionalInstructions } = body;
+            apiKey = key;
             optimizedPrompt = optimizePrompt(jsonData, tenantId, formatId, referenceSQLs, additionalInstructions);
         } else {
+            // 古いデータ形式（fallback）
+            console.log('古いデータ形式で処理');
+            const { apiKey: key, prompt } = body;
+            apiKey = key;
             optimizedPrompt = prompt;
+        }
+
+        if (!apiKey) {
+            throw new Error('APIキーが提供されていません');
         }
 
         console.log(`最終プロンプトサイズ: ${optimizedPrompt.length} 文字`);
@@ -157,7 +171,7 @@ exports.handler = async (event, context) => {
             },
             body: JSON.stringify({
                 model: 'claude-3-5-sonnet-20241022',
-                max_tokens: 4000,
+                max_tokens: 6000,
                 messages: [{
                     role: 'user',
                     content: optimizedPrompt
@@ -179,13 +193,14 @@ exports.handler = async (event, context) => {
         };
 
     } catch (error) {
-        console.error('Error:', error);
+        console.error('詳細エラー:', error);
         return {
             statusCode: 500,
             headers,
             body: JSON.stringify({ 
                 error: error.message,
-                type: error.name 
+                type: error.name,
+                stack: error.stack
             })
         };
     }
