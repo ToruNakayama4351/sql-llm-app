@@ -806,11 +806,58 @@
                 }
 
                 // プロンプトに追加指示を含める
+                // JSON簡略化関数
+                function simplifyJSON(jsonData) {
+                    if (!jsonData || typeof jsonData !== 'object') return jsonData;
+                    
+                    const simplified = {
+                        version: jsonData.version,
+                        timestamp: jsonData.timestamp,
+                        format: {
+                            name: jsonData.format?.name || 'Unknown Format',
+                            formatID: jsonData.format?.formatID,
+                            main_fields: {},
+                            tables_summary: []
+                        }
+                    };
+                    
+                    // 主要フィールドを抽出（座標情報は除外）
+                    if (jsonData.format?.boxes) {
+                        jsonData.format.boxes.forEach(box => {
+                            if (box.name && box.dataType) {
+                                simplified.format.main_fields[box.name] = box.dataType;
+                            }
+                        });
+                    }
+                    
+                    // テーブル情報を簡略化
+                    if (jsonData.format?.tables) {
+                        jsonData.format.tables.forEach(table => {
+                            const tableInfo = {
+                                name: table.name,
+                                columns: table.columns?.map(col => ({
+                                    name: col.name,
+                                    dataType: col.dataType
+                                })) || []
+                            };
+                            simplified.format.tables_summary.push(tableInfo);
+                        });
+                    }
+                    
+                    return simplified;
+                }
+
+                // 大きなJSONを簡略化
+                let processedJsonData = jsonData;
+                if (jsonData && JSON.stringify(jsonData).length > 10000) {
+                    console.log('大きなJSONを簡略化中...');
+                    processedJsonData = simplifyJSON(jsonData);
+                }
                 const prompt = `
 以下の情報を基に、適切なSQLクエリを生成してください。
 
 【JSONデータ】
-${jsonText || 'なし'}
+${processedJsonData ? JSON.stringify(processedJsonData, null, 2) : 'なし'}
 
 【帳票画像】
 ${uploadedImage ? `アップロード済み: ${uploadedImage.name}` : 'なし'}
