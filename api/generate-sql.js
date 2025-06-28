@@ -1,5 +1,10 @@
+// Vercelのタイムアウト設定を延長
+export const config = {
+    maxDuration: 180, // 3分（180秒）に設定
+};
+
 export default async function handler(req, res) {
-    console.log('🚀 SQL生成バックエンド開始');
+    console.log('🚀 SQL生成バックエンド開始（3分タイムアウト設定）');
     console.log('HTTPメソッド:', req.method);
     
     // CORS設定
@@ -51,16 +56,13 @@ export default async function handler(req, res) {
                 optimizedJsonData = jsonData;
             } else {
                 console.log('⚠️ 大きなJSONデータを軽度に簡略化');
-                // 最小限の簡略化のみ実行
                 optimizedJsonData = {
                     version: jsonData.version,
                     format: {
                         name: jsonData.format?.name,
                         formatID: jsonData.format?.formatID,
                         versionID: jsonData.format?.versionID,
-                        // 全Box項目を保持
                         boxes: jsonData.format?.boxes || [],
-                        // 全Table項目を保持
                         tables: jsonData.format?.tables || {}
                     }
                 };
@@ -77,53 +79,45 @@ export default async function handler(req, res) {
             optimizedReferenceSQLs = referenceSQLs.substring(0, 15000) + '\n[参考SQLが多いため一部省略]';
         }
 
-        // プロンプトの構築（参考SQLパターンを最優先 + 全項目明示）
+        // 効率的なプロンプト構築（トークン節約 + 完全性確保）
         const prompt = `
-【重要】以下の参考SQLパターンに厳密に従って、SQLクエリを生成してください。
-
-【参考SQLパターン（必ず従うこと）】
+【参考SQLパターン（厳密に従う）】
 ${optimizedReferenceSQLs || 'なし'}
 
-【適用するデータ情報】
-- テナントID: ${tenantId || 'なし'}
-- フォーマットID: ${formatId || 'なし'}
-- フォーマット名: ${optimizedJsonData?.format?.name || 'なし'}
+【適用データ】
+テナントID: ${tenantId || 'なし'}
+フォーマットID: ${formatId || 'なし'}
 
-【Box項目（${optimizedJsonData?.format?.boxes?.length || 0}個）- 全て含めること】
-${optimizedJsonData?.format?.boxes?.map((box, index) => `${index + 1}. ${box.name} (${box.dataType})`).join('\n') || 'なし'}
+【Box項目（${optimizedJsonData?.format?.boxes?.length || 0}個）全て含める】
+${optimizedJsonData?.format?.boxes?.map((box, i) => `${i+1}.${box.name}`).join('\n') || 'なし'}
 
-【Table項目（${Object.keys(optimizedJsonData?.format?.tables || {}).length}個）- 全カラム含めること】
-${Object.values(optimizedJsonData?.format?.tables || {}).map((table, tableIndex) => 
-    `テーブル${tableIndex + 1}: ${table.name}
-${table.columns?.map((col, colIndex) => `  ${colIndex + 1}. ${col.name} (${col.dataType})`).join('\n') || '  なし'}`
+【Table項目（各テーブルの全カラム）全て含める】
+${Object.values(optimizedJsonData?.format?.tables || {}).map((table, i) => 
+    `テーブル${i+1}:${table.name}\n${table.columns?.map((col, j) => `  ${j+1}.${col.name}`).join('\n') || ''}`
 ).join('\n') || 'なし'}
 
-【追加指示】
-${additionalInstructions || 'なし'}
-
 【生成ルール（絶対厳守）】
-1. 参考SQLとまったく同じ構造を使用する
-2. 上記の全てのBox項目（${optimizedJsonData?.format?.boxes?.length || 0}個）について個別のCTEを作成する
-3. 上記の全てのTableカラム（全カラム）について個別のCTEを作成する
-4. 一つも省略してはいけない - 全項目を必ず含める
-5. box.name = '項目名' の形式でフィルタリングする（field_idは使わない）
-6. table.column_name = 'カラム名' の形式で各カラムを個別処理する
-7. 最終SELECTでは全てのCTEをJOINする
-8. テナントIDとフォーマットIDのみ新しい値に置き換える
+1. 参考SQLと同じ構造使用
+2. 全Box項目（${optimizedJsonData?.format?.boxes?.length || 0}個）の個別CTE作成
+3. 全Tableカラムの個別CTE作成
+4. box.name='項目名'でフィルタ
+5. table.column_name='カラム名'で個別処理
+6. 全CTEをJOIN
+7. 説明文禁止、SQLのみ出力
+8. 省略禁止、完全なSQL生成
 
-【重要な注意事項】
-- 省略記号（...）や「省略」という表現は一切使用しない
-- 全ての項目を完全に記述する
-- SQLの途中で切れないよう、完全なSQLクエリを生成する
-- レスポンスサイズを気にせず、完全なSQLを出力する
-- 「複数のメッセージに分けて」「前半部分」「続く」などの対話的表現は禁止
-- 説明文は一切不要、SQLクエリのみを出力する
-- 1つの完全なSQLクエリとして出力する
+SQLクエリのみ出力:
+        `;
 
-上記の全てのBox項目（${optimizedJsonData?.format?.boxes?.length || 0}個）と全てのTableカラムを含む、参考SQLパターンに従った完全なSQLクエリのみを出力してください。`;
-
-        console.log('=== Claude API呼び出し開始 ===');
+        console.log('=== Claude API呼び出し開始（長時間処理対応）===');
         console.log('プロンプトサイズ:', prompt.length, '文字');
+
+        // Claude APIのタイムアウトも延長（170秒）
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => {
+            console.log('⚠️ Claude API タイムアウト（170秒）');
+            controller.abort();
+        }, 170000);
 
         const response = await fetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
@@ -134,13 +128,16 @@ ${additionalInstructions || 'なし'}
             },
             body: JSON.stringify({
                 model: 'claude-3-5-sonnet-20241022',
-                max_tokens: 8192, // Claude 3.5 Sonnetの最大値
+                max_tokens: 8192,
                 messages: [{
                     role: 'user',
                     content: prompt
                 }]
-            })
+            }),
+            signal: controller.signal
         });
+
+        clearTimeout(timeoutId);
 
         console.log('Claude APIレスポンス:');
         console.log('- ステータス:', response.status);
@@ -154,7 +151,7 @@ ${additionalInstructions || 'なし'}
 
         const data = await response.json();
         console.log('=== SQL生成成功 ===');
-        console.log('レスポンストークン数:', data.usage?.output_tokens || '不明');
+        console.log('出力トークン数:', data.usage?.output_tokens || '不明');
         
         return res.status(200).json(data);
 
@@ -162,7 +159,13 @@ ${additionalInstructions || 'なし'}
         console.error('=== SQL生成エラー ===');
         console.error('エラー名:', error.name);
         console.error('エラーメッセージ:', error.message);
-        console.error('スタックトレース:', error.stack);
+        
+        if (error.name === 'AbortError') {
+            return res.status(408).json({ 
+                error: 'SQL生成がタイムアウトしました。大きなデータの場合、処理に時間がかかる場合があります。',
+                type: 'timeout_error'
+            });
+        }
         
         return res.status(500).json({ 
             error: error.message,
