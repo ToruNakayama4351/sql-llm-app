@@ -713,36 +713,191 @@
         }
 
         // ファイル処理
-        function handleFile(file, type) {
-            if (type === 'image') {
-                if (!file.type.startsWith('image/')) {
-                    showStatus('画像ファイルを選択してください', 'error');
-                    return;
-                }
-                uploadedImage = file;
-                document.getElementById('imageInfo').innerHTML = `✅ ${file.name} (${(file.size/1024/1024).toFixed(2)}MB)`;
-                document.getElementById('imageInfo').style.display = 'block';
-            } else if (type === 'json') {
-                if (!file.name.toLowerCase().endsWith('.json')) {
-                    showStatus('JSONファイルを選択してください', 'error');
-                    return;
-                }
-                
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    try {
-                        const jsonData = JSON.parse(e.target.result);
-                        uploadedJSON = jsonData;
-                        document.getElementById('jsonText').value = JSON.stringify(jsonData, null, 2);
-                        document.getElementById('jsonInfo').innerHTML = `✅ ${file.name} (${(file.size/1024).toFixed(2)}KB)`;
-                        document.getElementById('jsonInfo').style.display = 'block';
-                    } catch (error) {
-                        showStatus('有効なJSONファイルではありません', 'error');
-                    }
-                };
-                reader.readAsText(file);
-            }
+        // JSONデータからSQL生成に必要な構造のみを抽出する関数
+function extractBoxAndTableStructure(jsonData) {
+    if (!jsonData || typeof jsonData !== 'object') return jsonData;
+    
+    const result = {
+        version: jsonData.version,
+        timestamp: jsonData.timestamp || new Date().toISOString(),
+        format: {
+            name: jsonData.format?.name || 'Unknown Format',
+            formatID: jsonData.format?.formatID,
+            versionID: jsonData.format?.versionID,
+            // Box項目を抽出（座標情報は除去）
+            boxes: [],
+            // Table項目を抽出（セル詳細は除去）
+            tables: {}
         }
+    };
+    
+    // Box項目の抽出
+    if (jsonData.format?.boxes && Array.isArray(jsonData.format.boxes)) {
+        result.format.boxes = jsonData.format.boxes.map(box => ({
+            fieldID: box.fieldID,
+            name: box.name,
+            dataType: box.dataType,
+            isRequired: box.isRequired,
+            isNew: box.isNew,
+            pageNum: box.pageNum,
+            inputSettings: box.inputSettings
+        }));
+    }
+    
+    // Table項目の抽出
+    if (jsonData.format?.tables) {
+        Object.keys(jsonData.format.tables).forEach(tableName => {
+            const table = jsonData.format.tables[tableName];
+            result.format.tables[tableName] = {
+                tableID: table.tableID,
+                name: table.name,
+                orientation: table.orientation,
+                pageNum: table.pageNum,
+                isNew: table.isNew,
+                // カラム情報を抽出（座標は除去）
+                columns: table.columns ? table.columns.map(col => ({
+                    columnID: col.columnID,
+                    name: col.name,
+                    dataType: col.dataType,
+                    isRequired: col.isRequired,
+                    isNew: col.isNew,
+                    isEndOfSection: col.isEndOfSection,
+                    isStartOfSection: col.isStartOfSection,
+                    pageNum: col.pageNum,
+                    // セル数のサマリーのみ保持
+                    cellCount: col.cells?.length || 0
+                })) : []
+            };
+        });
+    }
+    
+    return result;
+}
+
+// ファイルサイズを人間が読みやすい形式に変換
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// 軽量化サマリーを表示する関数
+function showOptimizationSummary(originalData, optimizedData) {
+    const originalSize = JSON.stringify(originalData).length;
+    const optimizedSize = JSON.stringify(optimizedData).length;
+    const reductionPercent = Math.round((1 - optimizedSize / originalSize) * 100);
+    
+    // Box項目とTable項目の数を集計
+    const boxCount = optimizedData.format?.boxes?.length || 0;
+    const tableCount = Object.keys(optimizedData.format?.tables || {}).length;
+    let totalColumns = 0;
+    Object.values(optimizedData.format?.tables || {}).forEach(table => {
+        totalColumns += table.columns?.length || 0;
+    });
+    
+    // サマリー表示エリアを作成
+    const summaryHTML = `
+        <div id="optimizationSummary" style="background: linear-gradient(135deg, #e3f2fd, #f0f4ff); padding: 20px; border-radius: 15px; margin: 15px 0; border-left: 4px solid #2196f3;">
+            <h4 style="color: #1976d2; margin-bottom: 15px;">📊 JSON軽量化完了！</h4>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                <div style="background: white; padding: 15px; border-radius: 10px; text-align: center;">
+                    <div style="font-size: 1.5rem; font-weight: bold; color: #4CAF50;">${reductionPercent}%</div>
+                    <div style="color: #666; font-size: 0.9rem;">データ削減</div>
+                </div>
+                <div style="background: white; padding: 15px; border-radius: 10px; text-align: center;">
+                    <div style="font-size: 1.2rem; font-weight: bold; color: #FF9800;">${formatFileSize(originalSize)}</div>
+                    <div style="color: #666; font-size: 0.9rem;">元サイズ</div>
+                </div>
+                <div style="background: white; padding: 15px; border-radius: 10px; text-align: center;">
+                    <div style="font-size: 1.2rem; font-weight: bold; color: #2196F3;">${formatFileSize(optimizedSize)}</div>
+                    <div style="color: #666; font-size: 0.9rem;">軽量化後</div>
+                </div>
+            </div>
+            <div style="margin-top: 15px; display: flex; justify-content: space-around; text-align: center;">
+                <div>
+                    <span style="font-weight: bold; color: #1976d2;">${boxCount}</span>
+                    <div style="font-size: 0.9rem; color: #666;">Box項目</div>
+                </div>
+                <div>
+                    <span style="font-weight: bold; color: #1976d2;">${tableCount}</span>
+                    <div style="font-size: 0.9rem; color: #666;">テーブル</div>
+                </div>
+                <div>
+                    <span style="font-weight: bold; color: #1976d2;">${totalColumns}</span>
+                    <div style="font-size: 0.9rem; color: #666;">カラム</div>
+                </div>
+            </div>
+            <div style="margin-top: 10px; text-align: center;">
+                <small style="color: #666;">✨ SQL生成に最適化されました！座標情報やセル詳細を除去し、構造情報のみを保持しています。</small>
+            </div>
+        </div>
+    `;
+    
+    // 既存のサマリーがあれば削除
+    const existingSummary = document.getElementById('optimizationSummary');
+    if (existingSummary) {
+        existingSummary.remove();
+    }
+    
+    // JSONInfo の後にサマリーを挿入
+    const jsonInfo = document.getElementById('jsonInfo');
+    jsonInfo.insertAdjacentHTML('afterend', summaryHTML);
+}
+
+// 改良版 handleFile 関数
+function handleFile(file, type) {
+    if (type === 'image') {
+        if (!file.type.startsWith('image/')) {
+            showStatus('画像ファイルを選択してください', 'error');
+            return;
+        }
+        uploadedImage = file;
+        document.getElementById('imageInfo').innerHTML = `✅ ${file.name} (${(file.size/1024/1024).toFixed(2)}MB)`;
+        document.getElementById('imageInfo').style.display = 'block';
+        
+    } else if (type === 'json') {
+        if (!file.name.toLowerCase().endsWith('.json')) {
+            showStatus('JSONファイルを選択してください', 'error');
+            return;
+        }
+        
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                // 元のJSONデータを解析
+                const originalJsonData = JSON.parse(e.target.result);
+                
+                // 軽量化処理を実行
+                showStatus('🔄 JSONデータを軽量化中...', 'success');
+                
+                setTimeout(() => {
+                    const optimizedJsonData = extractBoxAndTableStructure(originalJsonData);
+                    
+                    // 軽量化されたデータをテキストエリアに表示
+                    document.getElementById('jsonText').value = JSON.stringify(optimizedJsonData, null, 2);
+                    
+                    // アップロードされたJSONとして保存
+                    uploadedJSON = optimizedJsonData;
+                    
+                    // ファイル情報を表示
+                    document.getElementById('jsonInfo').innerHTML = `✅ ${file.name} (軽量化済み)`;
+                    document.getElementById('jsonInfo').style.display = 'block';
+                    
+                    // 軽量化サマリーを表示
+                    showOptimizationSummary(originalJsonData, optimizedJsonData);
+                    
+                    showStatus('🎉 JSONデータが軽量化されました！', 'success');
+                }, 500); // 軽量化処理感を演出
+                
+            } catch (error) {
+                showStatus('有効なJSONファイルではありません: ' + error.message, 'error');
+            }
+        };
+        reader.readAsText(file);
+    }
+}
 
         // SQL生成（実際のClaude API呼び出し）
        // 改良版 generateSQL 関数
