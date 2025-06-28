@@ -1,3 +1,8 @@
+// Netlify Functions のタイムアウト設定
+exports.handler.config = {
+  timeout: 60
+};
+
 exports.handler = async (event, context) => {
   const headers = {
     'Access-Control-Allow-Origin': '*',
