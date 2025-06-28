@@ -806,76 +806,71 @@
                 }
 
                 // プロンプトに追加指示を含める
-                // JSON詳細簡略化関数（重要情報は保持）
-                function advancedSimplifyJSON(jsonData) {
-                    if (!jsonData || typeof jsonData !== 'object') return jsonData;
-                    
-                    const simplified = {
-                        version: jsonData.version,
-                        timestamp: jsonData.timestamp,
-                        format: {
-                            name: jsonData.format?.name || 'Unknown Format',
-                            formatID: jsonData.format?.formatID,
-                            versionID: jsonData.format?.versionID,
-                            // 全フィールド詳細情報を保持
-                            fields: {},
-                            // テーブル完全構造を保持
-                            tables: {},
-                            // その他重要メタデータ
-                            defaultScale: jsonData.format?.defaultScale
-                        }
-                    };
-                    
-                    // 全フィールドの詳細情報を保持（座標以外）
-                    if (jsonData.format?.boxes) {
-                        jsonData.format.boxes.forEach(box => {
-                            simplified.format.fields[box.name] = {
-                                fieldID: box.fieldID,
-                                name: box.name,
-                                dataType: box.dataType,
-                                isRequired: box.isRequired,
-                                isNew: box.isNew,
-                                pageNum: box.pageNum,
-                                // 入力設定も保持
-                                inputSettings: box.inputSettings
-                            };
-                        });
-                    }
-                    
-                    // テーブル完全構造を保持（座標以外）
-                    if (jsonData.format?.tables) {
-                        jsonData.format.tables.forEach(table => {
-                            simplified.format.tables[table.name] = {
-                                tableID: table.tableID,
-                                name: table.name,
-                                orientation: table.orientation,
-                                pageNum: table.pageNum,
-                                isNew: table.isNew,
-                                columns: table.columns.map(col => ({
-                                    columnID: col.columnID,
-                                    name: col.name,
-                                    dataType: col.dataType,
-                                    isRequired: col.isRequired,
-                                    isNew: col.isNew,
-                                    isEndOfSection: col.isEndOfSection,
-                                    isStartOfSection: col.isStartOfSection,
-                                    pageNum: col.pageNum,
-                                    // セル数とデータ型情報
-                                    cellCount: col.cells?.length || 0,
-                                    cells: col.cells?.map(cell => ({
-                                        fieldID: cell.fieldID,
-                                        rowNum: cell.rowNum,
-                                        pageNum: cell.pageNum,
-                                        isNew: cell.isNew
-                                        // 座標は除外: x, y, w, h
-                                    })) || []
-                                }))
-                            };
-                        });
-                    }
-                    
-                    return simplified;
-                }
+                // より詳細なテーブル情報を保持する修正版
+function advancedSimplifyJSON(jsonData) {
+    if (!jsonData || typeof jsonData !== 'object') return jsonData;
+    
+    const simplified = {
+        version: jsonData.version,
+        timestamp: jsonData.timestamp,
+        format: {
+            name: jsonData.format?.name || 'Unknown Format',
+            formatID: jsonData.format?.formatID,
+            versionID: jsonData.format?.versionID,
+            // 全フィールド詳細情報を保持
+            fields: {},
+            // テーブル完全構造を保持
+            tables: [],
+            // その他重要メタデータ
+            defaultScale: jsonData.format?.defaultScale
+        }
+    };
+    
+    // 全フィールドの詳細情報を保持（座標以外）
+    if (jsonData.format?.boxes) {
+        jsonData.format.boxes.forEach(box => {
+            simplified.format.fields[box.name] = {
+                fieldID: box.fieldID,
+                name: box.name,
+                dataType: box.dataType,
+                isRequired: box.isRequired,
+                isNew: box.isNew,
+                pageNum: box.pageNum,
+                inputSettings: box.inputSettings
+            };
+        });
+    }
+    
+    // テーブル完全構造を配列形式で保持
+    if (jsonData.format?.tables) {
+        jsonData.format.tables.forEach(table => {
+            const tableInfo = {
+                tableID: table.tableID,
+                name: table.name,
+                orientation: table.orientation,
+                pageNum: table.pageNum,
+                isNew: table.isNew,
+                // カラム情報を詳細に保持
+                columns: table.columns.map(col => ({
+                    columnID: col.columnID,
+                    name: col.name,
+                    dataType: col.dataType,
+                    isRequired: col.isRequired,
+                    isNew: col.isNew,
+                    isEndOfSection: col.isEndOfSection,
+                    isStartOfSection: col.isStartOfSection,
+                    pageNum: col.pageNum,
+                    // セル情報も保持（座標除く）
+                    cellCount: col.cells?.length || 0,
+                    rowNumbers: col.cells?.map(cell => cell.rowNum) || []
+                }))
+            };
+            simplified.format.tables.push(tableInfo);
+        });
+    }
+    
+    return simplified;
+}
 
                 // 段階的簡略化（サイズに応じて調整）
                 function tieredSimplify(jsonData) {
