@@ -886,7 +886,7 @@ SQLクエリのみを出力してください。
                 `;
 
                 // Netlify Functionsを使用してAPI呼び出し
-                const response = await fetch('/.netlify/functions/generate-sql', {
+                const response = await fetch('/api/generate-sql', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
